@@ -5,5 +5,11 @@ create table if not exists public.kv (
   value jsonb not null,
   updated_at timestamptz not null default now()
 );
--- The server uses the service-role key, which bypasses RLS. Keep RLS on so the public anon key cannot read or write.
+
+-- Keep RLS on with no policies, so the public (publishable/anon) key cannot read or write.
 alter table public.kv enable row level security;
+
+-- The server uses the secret (service_role) key. Newer Supabase projects do not grant table
+-- access to service_role automatically, so grant it explicitly.
+grant usage on schema public to service_role;
+grant select, insert, update, delete on table public.kv to service_role;
