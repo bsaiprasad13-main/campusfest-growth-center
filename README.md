@@ -10,7 +10,7 @@ This submission has two parts:
 | Deliverable | Where |
 |---|---|
 | 3-slide strategy PDF | `docs/CampusFest-2027-Growth-Strategy.pdf` *(exported from the deck)* |
-| Working product | Live link: **[add after deploying]** · run locally: see [Setup](#7-setup) |
+| Working product | **Live: https://campusfest-growth-center-virid.vercel.app** · code: https://github.com/bsaiprasad13-main/campusfest-growth-center · run locally: see [Setup](#7-setup) |
 | Strategy model (all Slide 1–2 numbers) | [`docs/strategy_model.py`](docs/strategy_model.py) |
 | Metrics engine (all dashboard numbers) | [`src/lib/engine.ts`](src/lib/engine.ts) |
 | AI copilot | [`src/lib/copilot/`](src/lib/copilot) |
@@ -382,7 +382,7 @@ npm run build && npm start  # production build
 **Deploying (Vercel):**
 1. Import the repository.
 2. Set the variables above.
-3. Use Supabase for storage. Vercel's file system is temporary, and the app says so in its sidebar if Supabase isn't set.
+3. Use Supabase for storage (run `supabase/schema.sql` in the same project the Vercel variables point to). Vercel's file system is temporary, and the app says so in its sidebar if Supabase isn't set.
 
 The seed data is bundled through `outputFileTracingIncludes` in `next.config.ts`.
 
