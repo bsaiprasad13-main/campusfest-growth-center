@@ -85,3 +85,12 @@ describe("get_plan_2027", () => {
     expect(r.label_counts.scale).toBe(1);
   });
 });
+
+describe("get_plan_2027 what-if", () => {
+  it("answers a hypothetical venue cap without saving it", async () => {
+    const r = (await runTool("get_plan_2027", { cap_per_day: 3000 }, ctx())) as { what_if: { cap_per_day: number }; day1_load_if_targets_reached: { target: string; headroom: number }[] };
+    expect(r.what_if.cap_per_day).toBe(3000);
+    expect(r.day1_load_if_targets_reached.find((t) => t.target === "stretch")!.headroom).toBe(3000 - 3348);
+    expect(app.plan2027!.cap_per_day).toBe(4000);
+  });
+});

@@ -260,7 +260,7 @@ Next.js app. The menu has three groups: **2025 results** (the evidence), **2027 
 | **Campaign page** | Edit the plan (status, planned budget, owner, notes); add and edit tasks; **edit, add or delete daily marketing rows**; a daily chart; stage conversion vs all campaigns |
 | **Diagnose** | A stage-conversion heatmap vs the all-campaign rate; spend share vs attendee share; which engagement actions predict showing up; each campaign's bottleneck |
 | **Budget & rules** | A budget reallocation simulator (the same formulas as the deck's model, fed live campaign data, with assumption sliders; at actual spend it reproduces the actual 2,050); **editable scale/change/stop rules** that re-classify campaigns immediately; new target versions with effective dates |
-| **Bets & signals** (2027 plan) | The deck's five bets with budget, owner role and weeks. Type each bet's weekly signal and get a live **Scale / Change / Stop** label from Slide 3's lines (editable), plus the next action and a **Make this a task** button. Also shows registration pace against the 2025 curve, the attendance forecast, the day-1 peak against the venue cap, and a budget check that says what to cut if the budget shrinks. The budget, venue cap and planned registrations are editable constraints. It ships with a **simulated week-3 example**, clearly labelled, so every label can be seen working |
+| **Bets & signals** (2027 plan) | The deck's five bets with budget, owner role and weeks. Type each bet's weekly signal and get a live **Scale / Change / Stop** label from Slide 3's lines (editable). Slide 3's second condition for each bet (e.g. "scale only if ₹ per registration ≤ ₹80") is shown beside the label as "Also check". Each row also has the next action and a **Make this a task** button. Also shows registration pace against the 2025 curve, the attendance forecast, the day-1 peak against the venue cap, and a budget check that says what to cut if the budget shrinks. The budget, venue cap and planned registrations are editable constraints. It ships with a **simulated week-3 example**, clearly labelled, so every label can be seen working |
 | **Tasks** | Create, edit, filter and close tasks (owner, campaign, due date, priority, status); overdue tasks are highlighted; tasks from the copilot are labelled |
 | **Data & audit** | Source and storage details, the counting rules, a change log of every edit, and **reset to the original dataset** |
 
@@ -302,7 +302,7 @@ The copilot is a tool-calling agent ([`agent.ts`](src/lib/copilot/agent.ts)). Th
 | `get_timeseries` | Daily or weekly series for 8 metrics, optionally per campaign |
 | `query_records` | **A flexible filter/group/aggregate tool** over the cleaned person-level tables, for questions nobody anticipated |
 | `get_tasks` | Tasks, open and overdue counts |
-| `get_plan_2027` | The 2027 bets with their readings, thresholds, live labels and next actions; pace, forecast, day-1 peak vs cap, budget. Says when the readings are the simulated example |
+| `get_plan_2027` | The 2027 bets with their readings, thresholds, live labels, second checks and next actions; pace, forecast, day-1 peak vs cap, budget; the day-1 load if the base or stretch target is hit. Accepts a what-if cap or budget (not saved). Says when the readings are the simulated example |
 | `simulate_budget` | The planner's model, labelled as an estimate |
 | `calculate` | **An exact calculator** (a safe expression parser, no `eval`) |
 | `propose_task`, `propose_campaign_update` | **Draft** an action. Nothing is saved until the user clicks **Confirm** in the chat. |
@@ -348,7 +348,7 @@ The copilot is a tool-calling agent ([`agent.ts`](src/lib/copilot/agent.ts)). Th
 
 ## 6. Testing
 
-### 6.1 Automated tests (21, `npm test`)
+### 6.1 Automated tests (22, `npm test`)
 - **Engine** ([`engine.test.ts`](src/lib/engine.test.ts)):
   - the deduplication counts
   - 3,625 / 2,800 / 2,050 / 1,925 / 125 / 725, ₹2,74,000, 575 no-shows, 40 excluded admissions
@@ -362,7 +362,7 @@ The copilot is a tool-calling agent ([`agent.ts`](src/lib/copilot/agent.ts)). Th
   - time-series totals match the snapshot
   - the simulator spends the same total
   - proposals never save
-  - `get_plan_2027` returns five bets with live labels and flags the simulated readings
+  - `get_plan_2027` returns five bets with live labels and flags the simulated readings, and answers a what-if venue cap without saving it
 - **2027 plan** ([`plan2027.test.ts`](src/lib/plan2027.test.ts)):
   - labels follow the scale/stop lines
   - the pace curve reproduces 1,110 / 1,702 / 2,405 / 3,330 at weeks 3 / 5 / 7 / 9
@@ -396,7 +396,7 @@ The expected values were computed **independently in Python/pandas** from the or
 - The production build (`next build`) passes.
 
 ### 6.4 Independent review before submission
-Two separate AI reviewers were given only the brief, the deck PDF, the README and the live link. They used different models, different roles and no shared context: one was a line-by-line brief auditor that recomputed 48 numbers from the raw xlsx, and the other was a hiring manager testing the live product. Their findings were checked against the data before anything was changed. What was fixed is listed in §10.
+Two separate AI reviewers were given only the brief, the deck PDF, the README and the live link. They used different models, different roles and no shared context: one was a line-by-line brief auditor that recomputed 48 numbers from the raw xlsx, and the other was a hiring manager testing the live product. Their findings were checked against the data before anything was changed. What was fixed is listed in §10. A third reviewer then re-checked all 22 findings against the live site: 13 fixed, 8 partly fixed, none open, and one (open write endpoints) kept by design. Its remaining points were also addressed: the second checks above, a stretch-target capacity check and what-if cap in the copilot, plain-text formulas, and the rounding notes on the slides.
 
 ---
 
@@ -408,7 +408,7 @@ Requirements: Node 20+ (tested on Node 24).
 npm install
 cp .env.example .env        # then paste at least one AI key (see below)
 npm run dev                 # http://localhost:3000
-npm test                    # 21 tests
+npm test                    # 22 tests
 npm run build && npm start  # production build
 ```
 

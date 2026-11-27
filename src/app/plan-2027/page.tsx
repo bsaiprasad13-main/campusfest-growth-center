@@ -146,6 +146,7 @@ export default function Plan2027() {
                   <td className="pr-3">
                     {b.label === "no_reading" ? <Badge>No reading yet</Badge> : <DecisionChip status={b.label} />}
                     <p className="mt-1 max-w-[200px] text-xs text-slate-500">{b.reason}</p>
+                    {b.also_check && <p className="mt-1 max-w-[200px] text-xs text-amber-800">Also check: {b.also_check}</p>}
                   </td>
                   <td className="pr-3">
                     {b.action ? (
@@ -186,6 +187,10 @@ export default function Plan2027() {
           <div className="mt-3 space-y-1 text-sm">
             {p && <p><b>Pace:</b> {p.advice}</p>}
             {f && <p><b>Capacity:</b> {f.advice} Most the venue can admit over two days: {num(ev.ceiling)} people.</p>}
+            <p>
+              <b>If we hit the targets:</b>{" "}
+              {ev.target_capacity.map((t) => `${t.target} ${num(t.unique_attendees)} → day 1 ≈ ${num(t.day1_peak)} (${t.headroom >= 0 ? `${num(t.headroom)} under` : `${num(-t.headroom)} over`} the cap)`).join(" · ")}
+            </p>
             <p className="text-xs text-slate-500">Checkpoints for {num(draft.plan_registrations)} registrations: {(p?.checkpoints ?? []).map((c) => `wk ${c.week}: ${num(c.expected)}`).join(" · ")}</p>
           </div>
         </Card>

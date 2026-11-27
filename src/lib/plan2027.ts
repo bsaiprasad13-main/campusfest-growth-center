@@ -24,6 +24,7 @@ export interface BetDef {
   signal: string;
   unit: string; // shown after the reading: "%", "pts", "per college", "per week"
   gate_week: number; // week by which a Stop reading triggers the stop action
+  also_check: string | null; // Slide 3's second condition, checked by the team beside the main signal
   actions: { scale: string; change: string; stop: string };
   defaults: { budget_inr: number; scale_at: number; stop_below: number };
 }
@@ -33,6 +34,7 @@ export const BETS: BetDef[] = [
     id: "B1", rank: 1, score: 4.15, name: "Bring-Your-Crew referrals", campaign_name: "Student Referrals", owner_role: "Referral lead", weeks: "1–10",
     extra_attendees: { base: 377, stretch: 1117 }, risk: "Friends may not convert (our weakest assumption)",
     signal: "% of registrants whose crew pass gets ≥1 friend registered within 7 days", unit: "%", gate_week: 3,
+    also_check: "Scale only if ₹ per registration is ₹80 or less",
     actions: { scale: "Move ₹20k from paid retargeting into crew rewards", change: "Richer reward: fast-lane entry, merch for crews of 3+", stop: "Move ₹40k to Bets 2 and 3; cut the stretch target by 580" },
     defaults: { budget_inr: 80000, scale_at: 15, stop_below: 8 },
   },
@@ -40,6 +42,7 @@ export const BETS: BetDef[] = [
     id: "B2", rank: 2, score: 4.05, name: "Show-up engine", campaign_name: null, owner_role: "Ops lead", weeks: "6–10",
     extra_attendees: { base: 0, stretch: 437 }, risk: "Reminder fatigue: 13% of emailed people opted out in 2025",
     signal: "RSVP-yes lift vs the 10% holdout that gets no reminders", unit: "pts", gate_week: 8,
+    also_check: "Scale only if ≥65% are engaged; stop if opt-outs pass 8% in a wave",
     actions: { scale: "Add a reminder wave and shuttles", change: "Change timing; move email to WhatsApp", stop: "One reminder at 48h only" },
     defaults: { budget_inr: 60000, scale_at: 8, stop_below: 3 },
   },
@@ -47,6 +50,7 @@ export const BETS: BetDef[] = [
     id: "B3", rank: 3, score: 3.8, name: "College Squad Passes", campaign_name: "College Partnerships", owner_role: "Partnerships lead", weeks: "pilot 1–3, scale 4–9",
     extra_attendees: { base: 438, stretch: 610 }, risk: "Slow approvals; squads that register but don't come",
     signal: "Registrations per pilot college within 14 days", unit: "per college", gate_week: 3,
+    also_check: null,
     actions: { scale: "Sign all ~40 colleges", change: "Pitch clubs event slots or fest credit", stop: "No new agreements; serve signed colleges" },
     defaults: { budget_inr: 110000, scale_at: 25, stop_below: 12 },
   },
@@ -54,6 +58,7 @@ export const BETS: BetDef[] = [
     id: "B4", rank: 4, score: 3.5, name: "Pay-per-attendee ambassadors", campaign_name: "Campus Ambassadors", owner_role: "Ambassador lead", weeks: "2–10",
     extra_attendees: { base: 226, stretch: 301 }, risk: "Motivation dips when paid only after the fest",
     signal: "Registrations per ambassador per week", unit: "per week", gate_week: 3,
+    also_check: "Scale only if ≥70% of ambassadors are active",
     actions: { scale: "Recruit 20 more ambassadors", change: "Leaderboard and a small advance per registration", stop: "Drop the bottom half; move the money to Bet 3" },
     defaults: { budget_inr: 90000, scale_at: 2, stop_below: 1 },
   },
@@ -61,6 +66,7 @@ export const BETS: BetDef[] = [
     id: "B5", rank: 5, score: 2.7, name: "Walk-in capture + day-2 hook", campaign_name: null, owner_role: "Events lead", weeks: "4–10",
     extra_attendees: { base: 56, stretch: 355 }, risk: "Needs sponsor money; day 1 may pass the venue cap",
     signal: "Share of registrants planning to come on day 2 (weekly poll)", unit: "%", gate_week: 7,
+    also_check: "Stop if no headliner is signed by week 4",
     actions: { scale: "Promote day 2 hard", change: "Day-2 discount; move the headliner to day 2", stop: "Day passes only; staff the walk-in desk" },
     defaults: { budget_inr: 40000, scale_at: 40, stop_below: 25 },
   },
@@ -79,8 +85,10 @@ export const PACE_CURVE: [number, number][] = [[0, 0], [3, 0.3], [5, 0.46], [7, 
 export const PLAN_ASSUMPTIONS = {
   show_rate: 0.77, // base-case share of registrants who come [model]
   walkin_share: 0.06, // walk-ins as a share of attendees [2025 data]
-  day1_share: 0.7, // share of unique attendees present on day 1 [2025 data]
-  visits_per_person: 1.35, // 35% of 2025 attendees came on both days [2025 data]
+  day1_share: 1430 / 2050, // share of unique attendees present on day 1 [2025 data]
+  visits_per_person: 1 + 725 / 2050, // 35% of 2025 attendees came on both days [2025 data]
+  base_target: 3017, // strategy model, Slide 1
+  stretch_target: 4799, // strategy model, Slide 1
   day1_alert_share: 0.9, // alert when the day-1 forecast passes 90% of the cap (3,600 of 4,000)
 };
 
@@ -143,6 +151,7 @@ export interface BetEval {
   action: string | null;
   reason: string;
   gate_week: number;
+  also_check: string | null;
   before_gate: boolean; // a stop reading before the gate week is an early warning, not yet a stop
 }
 
@@ -156,6 +165,7 @@ export interface PlanEval {
   pace: null | { week: number; registrations_to_date: number; expected: number; ratio: number; status: "behind" | "on_track" | "ahead"; advice: string; checkpoints: { week: number; expected: number }[] };
   forecast: null | { registrations: number; registered_attendees: number; walk_ins: number; unique_attendees: number; day1_peak: number; cap_per_day: number; day1_alert_at: number; day1_status: "ok" | "near_cap" | "over_cap"; advice: string };
   ceiling: number;
+  target_capacity: { target: "base" | "stretch"; unique_attendees: number; day1_peak: number; cap_per_day: number; headroom: number; status: "ok" | "near_cap" | "over_cap" }[];
   assumptions: string[];
 }
 
@@ -178,7 +188,7 @@ export function evaluatePlan(p: Plan2027State): PlanEval {
       id: d.id, rank: d.rank, score: d.score, name: d.name, campaign_name: d.campaign_name, owner_role: d.owner_role, weeks: d.weeks,
       extra_attendees: d.extra_attendees, risk: d.risk, signal: d.signal, unit: d.unit,
       reading: b.reading, scale_at: b.scale_at, stop_below: b.stop_below, budget_inr: b.budget_inr,
-      label, action: label === "no_reading" ? null : d.actions[label], reason, gate_week: d.gate_week, before_gate: before,
+      label, action: label === "no_reading" ? null : d.actions[label], reason, gate_week: d.gate_week, also_check: d.also_check, before_gate: before,
     };
   });
   const counts = { scale: 0, change: 0, stop: 0, no_reading: 0 } as Record<BetLabel, number>;
@@ -237,11 +247,18 @@ export function evaluatePlan(p: Plan2027State): PlanEval {
     pace,
     forecast,
     ceiling: Math.round((p.cap_per_day * 2) / PLAN_ASSUMPTIONS.visits_per_person),
+    // Day-1 load if the base or stretch target is reached, at 2025's day-1 share.
+    target_capacity: (["base", "stretch"] as const).map((t) => {
+      const u = t === "base" ? PLAN_ASSUMPTIONS.base_target : PLAN_ASSUMPTIONS.stretch_target;
+      const d1 = Math.round(u * PLAN_ASSUMPTIONS.day1_share);
+      const st = d1 > p.cap_per_day ? "over_cap" : d1 > p.cap_per_day * PLAN_ASSUMPTIONS.day1_alert_share ? "near_cap" : "ok";
+      return { target: t, unique_attendees: u, day1_peak: d1, cap_per_day: p.cap_per_day, headroom: p.cap_per_day - d1, status: st as "ok" | "near_cap" | "over_cap" };
+    }),
     assumptions: [
       "Pace curve: 2025 had 30 / 46 / 65 / 90% of its registrations by weeks 3 / 5 / 7 / 9 (week 10 = fest) [data].",
       `Forecast = registrations so far ÷ that week's curve share × ${PLAN_ASSUMPTIONS.show_rate * 100}% who come [base-case model] ÷ (1 − ${PLAN_ASSUMPTIONS.walkin_share * 100}% walk-ins [2025 data]).`,
-      `Day-1 peak = ${PLAN_ASSUMPTIONS.day1_share * 100}% of unique attendees (2025 day-1 share) [data]. Ceiling = cap × 2 ÷ ${PLAN_ASSUMPTIONS.visits_per_person} visits per person [data].`,
-      "Scale line = the model's assumption for that bet holds; stop line ≈ half of it [assumption].",
+      `Day-1 peak = ${(PLAN_ASSUMPTIONS.day1_share * 100).toFixed(1)}% of unique attendees (2025 day-1 share) [data]. Ceiling = cap × 2 ÷ ${PLAN_ASSUMPTIONS.visits_per_person.toFixed(2)} visits per person [data].`,
+      "Scale line = the model's assumption for that bet holds; stop line ≈ half of it [assumption]. The label uses each bet's main signal; its second check (Slide 3) is listed beside it.",
     ],
   };
 }

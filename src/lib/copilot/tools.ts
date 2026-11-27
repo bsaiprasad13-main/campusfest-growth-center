@@ -5,6 +5,7 @@
  */
 import { clean, endOfDayMs, istDate, latestStatuses, isVerifiedAdmission } from "../engine";
 import { simulatePlan } from "../planner";
+import { evaluatePlan } from "../plan2027";
 import type { LoadedState } from "../state";
 import { calculate } from "./calc";
 
@@ -97,7 +98,7 @@ export const TOOL_DECLARATIONS = [
   {
     name: "get_plan_2027",
     description: "The 2027 strategy in the app: five ranked bets with this week's early-signal readings, scale/stop lines, live Scale/Change/Stop label and next action; registration pace vs the 2025 curve; attendance and day-1 forecast vs venue cap; budget allocation. Readings are typed in by the team (or a simulated example).",
-    parameters: { type: "OBJECT", properties: {} },
+    parameters: { type: "OBJECT", properties: { cap_per_day: N("optional what-if venue cap per day (not saved)"), budget_inr: N("optional what-if total budget (not saved)") } },
   },
   { name: "get_tasks", description: "Tasks with owner, campaign, due date, status; open and overdue counts.", parameters: { type: "OBJECT", properties: { status: S("todo|in_progress|blocked|done|open"), owner: S("optional"), campaign: S("optional") } } },
   {
@@ -480,9 +481,14 @@ async function tool_simulate(a: Args, ctx: ToolCtx) {
   };
 }
 
-async function tool_plan2027(ctx: ToolCtx) {
+async function tool_plan2027(a: Args, ctx: ToolCtx) {
   const st = await ctx.load();
-  const p = st.plan2027;
+  const whatIf: Record<string, number> = {};
+  for (const k of ["cap_per_day", "budget_inr"] as const) {
+    const v = Number(a[k]);
+    if (a[k] != null && Number.isFinite(v) && v > 0) whatIf[k] = v;
+  }
+  const p = Object.keys(whatIf).length ? evaluatePlan({ ...st.plan2027_inputs, ...whatIf }) : st.plan2027;
   return {
     note: p.simulated
       ? "These readings are the SIMULATED week-3 example shipped with the app, not real 2027 data. Say so when you use them."
@@ -491,7 +497,7 @@ async function tool_plan2027(ctx: ToolCtx) {
     bets: p.bets.map((b) => ({
       bet: `Bet ${b.rank} ${b.name}`, score: b.score, signal: b.signal, reading: b.reading, unit: b.unit, scale_at_or_above: b.scale_at, stop_below: b.stop_below,
       label: b.label, reason: b.reason, next_action: b.action, budget_inr: b.budget_inr, owner_role: b.owner_role, weeks: b.weeks,
-      extra_attendees_vs_2025: b.extra_attendees, biggest_risk: b.risk, related_2025_campaign: b.campaign_name,
+      extra_attendees_vs_2025: b.extra_attendees, biggest_risk: b.risk, related_2025_campaign: b.campaign_name, also_check: b.also_check,
       task_owner: (b.campaign_name && st.snapshot.campaigns.find((c) => c.campaign_name === b.campaign_name)?.owner_name) || null,
     })),
     for_tasks: "Recommend each bet's next_action as written. For a task about a bet, pass campaign = related_2025_campaign (if any) and owner = task_owner; leave owner empty when it is null.",
@@ -499,7 +505,9 @@ async function tool_plan2027(ctx: ToolCtx) {
     budget: { total_inr: p.budget.total_inr, allocated_inr: p.budget.allocated_inr, gap_inr: p.budget.gap_inr, advice: p.budget.advice },
     pace: p.pace,
     forecast: p.forecast,
+    what_if: Object.keys(whatIf).length ? { ...whatIf, note: "Hypothetical values for this answer only; nothing was saved." } : undefined,
     venue_ceiling_unique_people: p.ceiling,
+    day1_load_if_targets_reached: p.target_capacity,
     assumptions: p.assumptions,
   };
 }
@@ -580,7 +588,7 @@ async function runToolRaw(name: string, args: Args, ctx: ToolCtx): Promise<unkno
       case "get_timeseries": return await tool_timeseries(args, ctx);
       case "query_records": return await tool_query(args, ctx);
       case "get_tasks": return await tool_tasks(args, ctx);
-      case "get_plan_2027": return await tool_plan2027(ctx);
+      case "get_plan_2027": return await tool_plan2027(args, ctx);
       case "simulate_budget": return await tool_simulate(args, ctx);
       case "calculate": {
         const expr = String(args.expression ?? "");

@@ -24,7 +24,8 @@ describe("2027 plan", () => {
     expect(e.budget).toMatchObject({ allocated_inr: 500000, total_inr: 500000, status: "balanced" });
     expect(e.pace).toMatchObject({ expected: 1110, status: "on_track" });
     expect(e.forecast!.unique_attendees).toBe(Math.round(((980 / 0.3) * 0.77) / 0.94));
-    expect(e.ceiling).toBe(5926);
+    expect(e.ceiling).toBe(5910); // 4,000 × 2 ÷ (1 + 725 ÷ 2,050)
+    expect(e.target_capacity.map((t) => t.day1_peak)).toEqual([2105, 3348]);
   });
 
   it("responds to changed constraints: budget, cap and pace", () => {
@@ -34,7 +35,8 @@ describe("2027 plan", () => {
     expect(e.budget.status).toBe("over");
     expect(e.budget.advice).toMatch(/Bet 5/);
     expect(e.pace!.status).toBe("behind"); // 1,300 vs 1,702 expected = 76%
-    expect(e.forecast!.day1_peak).toBe(1620); // 1,300 ÷ 0.46 × 0.77 ÷ 0.94 × 0.70
+    expect(e.forecast!.day1_peak).toBe(Math.round(((1300 / 0.46) * 0.77 / 0.94) * (1430 / 2050)));
+    expect(e.target_capacity.find((t) => t.target === "stretch")).toMatchObject({ day1_peak: 3348, headroom: 1700 - 3348, status: "over_cap" });
     expect(e.forecast!.day1_status).toBe("near_cap"); // above 90% of 1,700
   });
 

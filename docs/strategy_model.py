@@ -1,7 +1,7 @@
 """Strategy model behind Slide 1 and Slide 2 of the deck (CampusFest 2027, Bengaluru, attendee growth).
 
 Per-channel economics are taken from the cleaned 2025 dataset [DATA].
-Plan inputs are [ASSUMPTION]s, explained in brainstorm-notes.md.
+Plan inputs are [ASSUMPTION]s, explained in README section 3.3.
 Run:  python -I -X utf8 docs/strategy_model.py
 """
 
