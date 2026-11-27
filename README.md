@@ -326,13 +326,15 @@ The copilot is a tool-calling agent ([`agent.ts`](src/lib/copilot/agent.ts)). Th
 ### 5.3 Providers and resilience
 [`providers.ts`](src/lib/copilot/providers.ts) supports any **OpenAI-compatible** API and **Gemini**.
 
-**Default order:**
+**Default order** (all free tiers, no card):
 1. Groq `openai/gpt-oss-120b`
-2. Groq `openai/gpt-oss-20b`
-3. Gemini (if a key is set)
+2. Gemini `gemini-3.8-flash`, then `gemini-3.5-flash-lite` and `gemini-3.1-flash-lite` (each has its own free daily quota; Flash-Lite allows the most)
+3. Groq `openai/gpt-oss-20b`, last, because small open models made more analysis slips in testing
+
+Gemini 3.5 Flash-Lite was tested on its own on a task draft, a "why" question and a calculation, and answered all three correctly.
 
 **Resilience rules:**
-- If a model is busy, out of quota or not offered to the key, the copilot moves to the next one.
+- If a model is busy, out of quota or not offered to the key, the copilot moves to the next one, **even in the middle of an answer**: steps taken by another model are replayed to Gemini as plain text, because Gemini rejects function calls it did not make itself.
 - Short per-minute rate limits are waited out (up to 15 s) rather than downgrading the model.
 - Every call has a timeout, and each answer has a 55-second deadline (inside Vercel's 60-second limit). If time runs out, it says so plainly instead of spinning.
 - Optional tool arguments accept `null`, and a malformed tool call (a 400 from the provider's schema check) is retried on the same model, because it is random.
@@ -348,7 +350,7 @@ The copilot is a tool-calling agent ([`agent.ts`](src/lib/copilot/agent.ts)). Th
 
 ## 6. Testing
 
-### 6.1 Automated tests (22, `npm test`)
+### 6.1 Automated tests (23, `npm test`)
 - **Engine** ([`engine.test.ts`](src/lib/engine.test.ts)):
   - the deduplication counts
   - 3,625 / 2,800 / 2,050 / 1,925 / 125 / 725, ₹2,74,000, 575 no-shows, 40 excluded admissions
@@ -363,6 +365,7 @@ The copilot is a tool-calling agent ([`agent.ts`](src/lib/copilot/agent.ts)). Th
   - the simulator spends the same total
   - proposals never save
   - `get_plan_2027` returns five bets with live labels and flags the simulated readings, and answers a what-if venue cap without saving it
+- **Providers** ([`providers.test.ts`](src/lib/copilot/providers.test.ts)): Gemini can take over mid-answer, with the other model's tool steps sent as text
 - **2027 plan** ([`plan2027.test.ts`](src/lib/plan2027.test.ts)):
   - labels follow the scale/stop lines
   - the pace curve reproduces 1,110 / 1,702 / 2,405 / 3,330 at weeks 3 / 5 / 7 / 9
@@ -408,7 +411,7 @@ Requirements: Node 20+ (tested on Node 24).
 npm install
 cp .env.example .env        # then paste at least one AI key (see below)
 npm run dev                 # http://localhost:3000
-npm test                    # 22 tests
+npm test                    # 23 tests
 npm run build && npm start  # production build
 ```
 
@@ -418,8 +421,9 @@ npm run build && npm start  # production build
 |---|---|
 | `GROQ_API_KEY` | Main copilot provider (free key: console.groq.com/keys) |
 | `GROQ_MODELS` | Default `openai/gpt-oss-120b,openai/gpt-oss-20b` |
-| `GEMINI_API_KEY`, `GEMINI_MODELS` | Optional backup provider |
-| `LLM_PROVIDERS` | Order to try providers in, default `groq,gemini` |
+| `GEMINI_API_KEY`, `GEMINI_MODELS` | Free backup provider (aistudio.google.com/apikey), default `gemini-3.8-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite` |
+| `BACKUP_API_KEY`, `BACKUP_BASE_URL`, `BACKUP_MODELS` | Optional extra provider: any OpenAI-compatible host |
+| `LLM_PROVIDERS` | Order to try providers in, default `groq,backup,gemini`; configured providers left out are tried last |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Optional durable storage; run `supabase/schema.sql` once |
 
 **Without an AI key,** everything except the copilot works, and the copilot explains what's missing. **Without Supabase,** edits are saved to `data/store/`.

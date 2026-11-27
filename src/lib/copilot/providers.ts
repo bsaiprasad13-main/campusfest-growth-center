@@ -97,19 +97,25 @@ export function openAICompatible(id: string, baseUrl: string, apiKey: string, mo
           });
         } else messages.push({ role: "tool", tool_call_id: m.toolCallId, content: JSON.stringify(m.result) });
       }
-      const res = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({
-          model,
-          messages,
-          tools: tools.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: nullableOptionals(toJsonSchema(t.parameters)) } })),
-          tool_choice: requireTool ? "required" : "auto",
-          temperature: 0.2,
-        }),
-        signal,
-      });
-      const j = await res.json().catch(() => ({}));
+      const send = (toolChoice: string) =>
+        fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
+          method: "POST",
+          headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model,
+            messages,
+            tools: tools.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: nullableOptionals(toJsonSchema(t.parameters)) } })),
+            tool_choice: toolChoice,
+            temperature: 0.2,
+          }),
+          signal,
+        });
+      let res = await send(requireTool ? "required" : "auto");
+      let j = await res.json().catch(() => ({}));
+      if (!res.ok && res.status === 400 && requireTool && /tool_choice/i.test(JSON.stringify(j))) {
+        res = await send("auto");
+        j = await res.json().catch(() => ({}));
+      }
       if (!res.ok) {
         const retryAfterMs = parseDuration(res.headers.get("retry-after")) ?? parseDuration(res.headers.get("x-ratelimit-reset-tokens"));
         return { ok: false, status: res.status, message: j?.error?.message ?? JSON.stringify(j).slice(0, 300), retryAfterMs };
@@ -138,16 +144,28 @@ export function gemini(apiKey: string, models: string[]): Provider {
     models,
     async call(model, system, msgs, tools, { signal, requireTool }) {
       const contents: GContent[] = [];
+      // Gemini rejects function calls it did not produce itself (no thought signature). Steps taken by
+      // another model are replayed as plain text, so Gemini can take over in the middle of an answer.
+      const foreignCallIds = new Set<string>();
+      const pushUserText = (text: string) => {
+        const last = contents[contents.length - 1];
+        if (last && last.role === "user" && last.parts.every((p) => p.text != null)) last.parts.push({ text });
+        else contents.push({ role: "user", parts: [{ text }] });
+      };
       for (const m of msgs) {
-        if (m.role === "user") contents.push({ role: "user", parts: [{ text: m.text }] });
+        if (m.role === "user") pushUserText(m.text);
         else if (m.role === "assistant") {
           if (m.raw?.provider === "gemini") contents.push({ role: "model", parts: m.raw.data as GPart[] });
           else {
-            const parts: GPart[] = [];
-            if (m.text) parts.push({ text: m.text });
-            for (const c of m.toolCalls ?? []) parts.push({ functionCall: { name: c.name, args: c.args } });
-            contents.push({ role: "model", parts: parts.length ? parts : [{ text: "" }] });
+            const calls = (m.toolCalls ?? []).map((c) => {
+              foreignCallIds.add(c.id);
+              return `[I called the tool ${c.name} with ${JSON.stringify(c.args)}]`;
+            });
+            const text = [m.text, ...calls].filter(Boolean).join("\n");
+            contents.push({ role: "model", parts: [{ text: text || "…" }] });
           }
+        } else if (foreignCallIds.has(m.toolCallId)) {
+          pushUserText(`[Result of ${m.name}]: ${JSON.stringify(m.result)}`);
         } else {
           const part: GPart = { functionResponse: { name: m.name, response: { result: m.result } } };
           const last = contents[contents.length - 1];
@@ -188,9 +206,15 @@ export function configuredProviders(): Provider[] {
   if (process.env.GROQ_API_KEY) {
     all.groq = openAICompatible("groq", process.env.GROQ_BASE_URL ?? "https://api.groq.com/openai/v1", process.env.GROQ_API_KEY, list(process.env.GROQ_MODELS, "openai/gpt-oss-120b,openai/gpt-oss-20b"));
   }
-  if (process.env.GEMINI_API_KEY) {
-    all.gemini = gemini(process.env.GEMINI_API_KEY, list(process.env.GEMINI_MODELS, "gemini-3.8-flash,gemini-3.1-flash-lite"));
+  // Optional extra provider: any OpenAI-compatible host (BACKUP_BASE_URL + BACKUP_MODELS).
+  if (process.env.BACKUP_API_KEY) {
+    all.backup = openAICompatible("backup", process.env.BACKUP_BASE_URL ?? "https://api.cerebras.ai/v1", process.env.BACKUP_API_KEY, list(process.env.BACKUP_MODELS, "gpt-oss-120b"));
   }
-  const order = list(process.env.LLM_PROVIDERS, "groq,gemini");
+  if (process.env.GEMINI_API_KEY) {
+    all.gemini = gemini(process.env.GEMINI_API_KEY, list(process.env.GEMINI_MODELS, "gemini-3.8-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite"));
+  }
+  // LLM_PROVIDERS sets the order; any configured provider it leaves out is still tried, last.
+  const order = list(process.env.LLM_PROVIDERS, "groq,backup,gemini");
+  for (const id of ["groq", "backup", "gemini"]) if (!order.includes(id)) order.push(id);
   return order.map((p) => all[p]).filter(Boolean);
 }

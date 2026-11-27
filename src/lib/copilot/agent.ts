@@ -63,8 +63,9 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export async function runAgent(history: ChatTurn[], message: string, asOf: string | undefined): Promise<AgentResult> {
   const providers = configuredProviders();
   if (!providers.length) throw new Error("NO_KEY");
-  // Small models (e.g. gpt-oss-20b, *-lite) make more analysis slips, so every larger model is tried first.
-  const isSmall = (m: string) => /(^|[-/])(\d{1,2}b|mini|lite|nano)(\b|-|$)/i.test(m);
+  // Small open models (e.g. gpt-oss-20b) made more analysis slips in testing, so every other model is tried first.
+  // Gemini Flash-Lite is not treated as small: it answered the test questions correctly.
+  const isSmall = (m: string) => /(^|[-/])(\d{1,2}b|mini|nano)(\b|-|$)/i.test(m);
   const all = providers.flatMap((p) => p.models.map((model) => ({ p, model })));
   const candidates: { p: Provider; model: string }[] = [...all.filter((c) => !isSmall(c.model)), ...all.filter((c) => isSmall(c.model))];
   let ci = 0;
@@ -100,10 +101,7 @@ export async function runAgent(history: ChatTurn[], message: string, asOf: strin
   async function callModel(requireTool: boolean) {
     while (ci < candidates.length) {
       const { p, model } = candidates[ci];
-      // Gemini rejects tool-call history it did not produce itself (missing thought signatures),
-      // so never switch INTO Gemini in the middle of a multi-step answer.
-      const foreignCalls = msgs.some((m) => m.role === "assistant" && m.toolCalls?.length && m.raw?.provider !== p.id);
-      if (p.kind === "gemini" && foreignCalls) { ci++; continue; }
+      // Any model can take over mid-answer: the Gemini adapter replays other models' tool steps as text.
       const remaining = deadline - Date.now();
       if (remaining < 3000) throw new Error("DEADLINE");
       let r;
