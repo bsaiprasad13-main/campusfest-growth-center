@@ -94,6 +94,11 @@ export const TOOL_DECLARATIONS = [
       required: ["table"],
     },
   },
+  {
+    name: "get_plan_2027",
+    description: "The 2027 strategy in the app: five ranked bets with this week's early-signal readings, scale/stop lines, live Scale/Change/Stop label and next action; registration pace vs the 2025 curve; attendance and day-1 forecast vs venue cap; budget allocation. Readings are typed in by the team (or a simulated example).",
+    parameters: { type: "OBJECT", properties: {} },
+  },
   { name: "get_tasks", description: "Tasks with owner, campaign, due date, status; open and overdue counts.", parameters: { type: "OBJECT", properties: { status: S("todo|in_progress|blocked|done|open"), owner: S("optional"), campaign: S("optional") } } },
   {
     name: "simulate_budget",
@@ -104,7 +109,7 @@ export const TOOL_DECLARATIONS = [
         moves: { type: "ARRAY", items: { type: "OBJECT", properties: { campaign: S("name or ID"), new_spend: N("new total INR") }, required: ["campaign", "new_spend"] } },
         elasticity: N("default 0.4"),
         show_uplift_pts: N("default 0"),
-        walkin_share: N("default 0.06"),
+        walkin_share: N("default: the actual walk-in share"),
         as_of: AS_OF,
       },
       required: ["moves"],
@@ -152,7 +157,7 @@ const DICTIONARY_NOTES = {
     "Feedback, satisfaction or NPS",
     "Multi-touch attribution or cross-campaign overlap",
     "Planned per-campaign budgets (unless the team sets one in this app)",
-    "Any data about other years or future editions; 2027 plans in the strategy deck are assumptions",
+    "Any observed data about other years; the 2027 plan (get_plan_2027) holds team-entered readings or a simulated example, not dataset facts",
   ],
 };
 
@@ -173,7 +178,7 @@ async function tool_dictionary(ctx: ToolCtx) {
     },
     campaigns: st.snapshot.campaigns.map((c) => ({ id: c.campaign_id, name: c.campaign_name, channel: c.channel, owner: c.owner_name })),
     owners: st.owners,
-    app_records: ["tasks", "campaign plans (status, planned budget, notes)", "decision rules", "audit log"],
+    app_records: ["tasks", "campaign plans (status, planned budget, notes)", "decision rules", "2027 plan: bets, weekly readings, thresholds, budget, venue cap", "audit log"],
     ...DICTIONARY_NOTES,
   };
 }
@@ -452,7 +457,12 @@ async function tool_simulate(a: Args, ctx: ToolCtx) {
   const params = {
     elasticity: Number.isFinite(Number(a.elasticity)) && a.elasticity != null ? Number(a.elasticity) : 0.4,
     show_uplift_pts: Number(a.show_uplift_pts ?? 0) || 0,
-    walkin_share: a.walkin_share != null ? Number(a.walkin_share) : 0.06,
+    walkin_share:
+      a.walkin_share != null && Number.isFinite(Number(a.walkin_share))
+        ? Number(a.walkin_share)
+        : st.snapshot.event.phase === "post_event" && st.snapshot.totals.unique_attendees > 0
+          ? st.snapshot.totals.walk_in_attendees / st.snapshot.totals.unique_attendees
+          : st.settings.assumed_walkin_share,
     max_show_rate: 0.92,
   };
   const base = simulatePlan(st.snapshot, { ...params, allocation: {} });
@@ -467,6 +477,30 @@ async function tool_simulate(a: Args, ctx: ToolCtx) {
     changed_campaigns: scen.rows.filter((r) => r.campaign_id in allocation),
     assumptions: scen.assumptions,
     warnings: scen.warnings,
+  };
+}
+
+async function tool_plan2027(ctx: ToolCtx) {
+  const st = await ctx.load();
+  const p = st.plan2027;
+  return {
+    note: p.simulated
+      ? "These readings are the SIMULATED week-3 example shipped with the app, not real 2027 data. Say so when you use them."
+      : `Readings entered by the team${p.updated_at ? ` (last saved ${p.updated_at.slice(0, 10)})` : ""}. 2027 has not happened in the dataset; this is plan tracking.`,
+    week: p.week,
+    bets: p.bets.map((b) => ({
+      bet: `Bet ${b.rank} ${b.name}`, score: b.score, signal: b.signal, reading: b.reading, unit: b.unit, scale_at_or_above: b.scale_at, stop_below: b.stop_below,
+      label: b.label, reason: b.reason, next_action: b.action, budget_inr: b.budget_inr, owner_role: b.owner_role, weeks: b.weeks,
+      extra_attendees_vs_2025: b.extra_attendees, biggest_risk: b.risk, related_2025_campaign: b.campaign_name,
+      task_owner: (b.campaign_name && st.snapshot.campaigns.find((c) => c.campaign_name === b.campaign_name)?.owner_name) || null,
+    })),
+    for_tasks: "Recommend each bet's next_action as written. For a task about a bet, pass campaign = related_2025_campaign (if any) and owner = task_owner; leave owner empty when it is null.",
+    label_counts: p.counts,
+    budget: { total_inr: p.budget.total_inr, allocated_inr: p.budget.allocated_inr, gap_inr: p.budget.gap_inr, advice: p.budget.advice },
+    pace: p.pace,
+    forecast: p.forecast,
+    venue_ceiling_unique_people: p.ceiling,
+    assumptions: p.assumptions,
   };
 }
 
@@ -546,6 +580,7 @@ async function runToolRaw(name: string, args: Args, ctx: ToolCtx): Promise<unkno
       case "get_timeseries": return await tool_timeseries(args, ctx);
       case "query_records": return await tool_query(args, ctx);
       case "get_tasks": return await tool_tasks(args, ctx);
+      case "get_plan_2027": return await tool_plan2027(ctx);
       case "simulate_budget": return await tool_simulate(args, ctx);
       case "calculate": {
         const expr = String(args.expression ?? "");

@@ -49,12 +49,33 @@ function toJsonSchema(s: unknown): unknown {
   return s;
 }
 
-function parseArgs(a: unknown): Record<string, unknown> {
-  if (a && typeof a === "object") return a as Record<string, unknown>;
-  if (typeof a === "string" && a.trim()) {
-    try { return JSON.parse(a); } catch { return {}; }
+// Optional scalar parameters also accept null: some models send null for "not given", and Groq
+// rejects the whole response when a tool call does not match the schema.
+function nullableOptionals(schema: unknown): unknown {
+  if (Array.isArray(schema)) return schema.map(nullableOptionals);
+  if (!schema || typeof schema !== "object") return schema;
+  const o = { ...(schema as Record<string, unknown>) };
+  if (o.properties && typeof o.properties === "object") {
+    const req = new Set(Array.isArray(o.required) ? (o.required as string[]) : []);
+    o.properties = Object.fromEntries(
+      Object.entries(o.properties as Record<string, Record<string, unknown>>).map(([k, v]) => {
+        const inner = nullableOptionals(v) as Record<string, unknown>;
+        return [k, !req.has(k) && typeof inner.type === "string" && ["string", "number", "integer", "boolean"].includes(inner.type) ? { ...inner, type: [inner.type, "null"] } : inner];
+      }),
+    );
   }
-  return {};
+  if (o.items) o.items = nullableOptionals(o.items);
+  return o;
+}
+
+// Parse tool arguments and drop null/empty values, so tools see "not given" consistently.
+function parseArgs(a: unknown): Record<string, unknown> {
+  let o: unknown = a;
+  if (typeof a === "string") {
+    try { o = a.trim() ? JSON.parse(a) : {}; } catch { o = {}; }
+  }
+  if (!o || typeof o !== "object" || Array.isArray(o)) return {};
+  return Object.fromEntries(Object.entries(o as Record<string, unknown>).filter(([, v]) => v !== null && v !== undefined && v !== ""));
 }
 
 // ---------------- OpenAI-compatible (Groq) ----------------
@@ -82,7 +103,7 @@ export function openAICompatible(id: string, baseUrl: string, apiKey: string, mo
         body: JSON.stringify({
           model,
           messages,
-          tools: tools.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: toJsonSchema(t.parameters) } })),
+          tools: tools.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: nullableOptionals(toJsonSchema(t.parameters)) } })),
           tool_choice: requireTool ? "required" : "auto",
           temperature: 0.2,
         }),
@@ -152,7 +173,7 @@ export function gemini(apiKey: string, models: string[]): Provider {
       if (!res.ok) return { ok: false, status: res.status, message: j?.error?.message ?? JSON.stringify(j).slice(0, 300) };
       const parts: GPart[] | undefined = j.candidates?.[0]?.content?.parts;
       if (!parts?.length) return { ok: false, status: 502, message: `no answer (${j.candidates?.[0]?.finishReason ?? j.promptFeedback?.blockReason ?? "empty"})` };
-      const toolCalls = parts.filter((p) => p.functionCall).map((p, i) => ({ id: `g_${Date.now()}_${i}`, name: p.functionCall!.name, args: p.functionCall!.args ?? {} }));
+      const toolCalls = parts.filter((p) => p.functionCall).map((p, i) => ({ id: `g_${Date.now()}_${i}`, name: p.functionCall!.name, args: parseArgs(p.functionCall!.args ?? {}) }));
       return { ok: true, text: parts.map((p) => p.text ?? "").join(""), toolCalls, raw: parts, tokens: j.usageMetadata?.totalTokenCount };
     },
   };

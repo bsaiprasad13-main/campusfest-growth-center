@@ -3,6 +3,7 @@
  * user confirms). Each write validates input and appends an audit entry.
  */
 import { getApp, getDataset, saveApp, saveTable, withLock, resetAll } from "./store";
+import { applyPlanPatch, defaultPlan2027, type Plan2027State } from "./plan2027";
 import type { AppState, CampaignRow, DailyRow, PlanStatus, Settings, TargetRow, Task, TaskPriority, TaskStatus } from "./types";
 
 export class InputError extends Error {}
@@ -265,6 +266,25 @@ export function updateSettings(patch: Partial<Settings> & { rules?: Partial<Sett
     if (next.assumed_walkin_share < 0 || next.assumed_walkin_share >= 1) throw new InputError("assumed_walkin_share must be between 0 and 1");
     app.settings = next;
     audit(app, "user", "settings.update", Object.keys(patch).join(", "));
+    await saveApp(app);
+    return next;
+  });
+}
+
+// ---------------- 2027 plan ----------------
+
+export function updatePlan2027(patch: Record<string, unknown>, actor: "user" | "copilot" = "user"): Promise<Plan2027State> {
+  return withLock(async () => {
+    const app = await getApp();
+    let next: Plan2027State;
+    try {
+      next = applyPlanPatch(app.plan2027 ?? defaultPlan2027(), patch);
+    } catch (e) {
+      throw new InputError(e instanceof Error ? e.message : String(e));
+    }
+    app.plan2027 = next;
+    const what = Object.keys(patch).map((k) => (k === "bets" && patch.bets && typeof patch.bets === "object" ? `bets ${Object.keys(patch.bets).join("/")}` : k)).join(", ");
+    audit(app, actor, "plan2027.update", what);
     await saveApp(app);
     return next;
   });

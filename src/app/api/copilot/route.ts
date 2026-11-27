@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { runAgent, type ChatTurn } from "@/lib/copilot/agent";
+import { CopilotUnavailable, runAgent, type ChatTurn } from "@/lib/copilot/agent";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -25,7 +25,11 @@ export async function POST(req: Request) {
         { status: 503 },
       );
     }
+    if (e instanceof CopilotUnavailable) {
+      console.warn("copilot unavailable:", e.detail);
+      return NextResponse.json({ error: e.message, detail: e.detail, retry_after_s: e.retryAfterS }, { status: e.retryAfterS != null ? 429 : 503 });
+    }
     console.error(e);
-    return NextResponse.json({ error: msg }, { status: 502 });
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

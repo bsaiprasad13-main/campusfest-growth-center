@@ -9,11 +9,18 @@ This submission has two parts:
 
 | Deliverable | Where |
 |---|---|
-| 3-slide strategy PDF | `docs/CampusFest-2027-Growth-Strategy.pdf` *(exported from the deck)* |
+| 3-slide strategy PDF | [`docs/CampusFest-2027-Growth-Strategy.pdf`](docs/CampusFest-2027-Growth-Strategy.pdf) |
 | Working product | **Live: https://campusfest-growth-center-virid.vercel.app** · code: https://github.com/bsaiprasad13-main/campusfest-growth-center · run locally: see [Setup](#7-setup) |
 | Strategy model (all Slide 1–2 numbers) | [`docs/strategy_model.py`](docs/strategy_model.py) |
 | Metrics engine (all dashboard numbers) | [`src/lib/engine.ts`](src/lib/engine.ts) |
 | AI copilot | [`src/lib/copilot/`](src/lib/copilot) |
+
+### Reviewer quick start (3 minutes)
+1. **Overview:** 2025 baseline. 2,050 unique attendees against a 2,200 target; 875 registrants never came.
+2. **Campaigns:** each channel's Scale / Change / Stop call with its reasons. Paid Social and Creators are Stop at ₹274 and ₹337 per attendee.
+3. **Bets & signals** (the 2027 plan): the deck's five bets. Type a weekly signal and the label changes live. Click **Make this a task** on a Stop bet, and the task appears in **Tasks**.
+4. **Copilot** (orange button): ask *"Which 2027 bet has crossed a stop line? Draft a task for it."* It reads the data through tools, shows how it got the answer, and saves the task only after you click **Confirm**.
+5. **Change the data:** edit a spend row on a campaign page, or the budget or venue cap on Bets & signals, and every number and copilot answer updates. **Data & audit → Reset** restores the original dataset.
 
 Every figure here is tagged:
 - **[D]**: computed from the supplied 2025 dataset.
@@ -48,11 +55,13 @@ Every figure here is tagged:
 | Five ranked strategies with contribution, budget, timeline, test, KPIs | Slide 2; §3.5 |
 | Prioritization framework, double down, reject | Slide 2; §3.5 |
 | Risks, early signals, scale/change/stop thresholds, actions | Slide 3; §3.6 |
+| Show how the dashboard and AI help these decisions | App: **Bets & signals** (live label per bet, pace, forecast, day-1 peak vs cap, one-click task); copilot tool `get_plan_2027` |
 | Measure: funnel, campaign KPIs, targets vs actuals, budget, projection | App: **Overview**, **Campaigns** |
 | Diagnose: winners, laggards, bottlenecks, drivers | App: **Diagnose**, campaign pages |
-| Support decisions: prioritise, allocate, scale/change/stop | App: **Plan & decide** (simulator + editable rules), live decision labels |
+| Support decisions: prioritise, allocate, scale/change/stop | App: **Budget & rules** (simulator + editable rules), **Bets & signals**, live decision labels |
 | Manage execution: campaigns, tasks, owners, deadlines; changes update analytics | App: **Tasks**, campaign pages (editable plans and daily rows), **Data & audit** |
 | AI copilot grounded in live data, with diagnosis, recommendations, execution and honesty about limits | Copilot side panel; §5 and §6.2 |
+| "We may test your product by changing campaign data or constraints" | Campaign plans, daily spend rows, targets, rules, bet readings and thresholds, the budget and the venue cap are all editable; everything recalculates (§4) |
 | README: research, assumptions, calculations, sources, framework, setup, tools, limitations | This file |
 
 ---
@@ -104,7 +113,7 @@ Every figure here is tagged:
 
 ### 2.3 Insights that drive the strategy [D]
 - **Spend went to the least efficient channels.** Paid Social and Creators took 56% of spend but delivered 25% of attendees.
-- **Peer and group channels turn registrants into attendees:** 79–86% of their registrants came, against 50% for paid channels.
+- **Peer and group channels turn registrants into attendees:** 79–86% of registrants from referrals, college partnerships and community groups came (ambassadors: 75%), against 50% for paid channels.
 - **875 registrants never came:**
   - 575 confirmed but didn't show up
   - 183 cancelled
@@ -114,7 +123,7 @@ Every figure here is tagged:
   - Brochure downloaders came **+12.8 points** more often (74.7% vs 61.9%).
   - People who asked a question came **+11.4 points** more often.
   - People who opened an email came at the same rate as those who didn't (+0.2).
-- **Email fatigue is real:** 16% of the people who were emailed opted out.
+- **Email fatigue is real:** 13% of the people who were emailed opted out (178 of 1,400). In total 229 people opted out; 51 of them were never emailed.
 
 ---
 
@@ -128,10 +137,10 @@ Every figure here is tagged:
 ### 3.2 Target audiences
 | Priority | Segment | Size | Why |
 |---|---|---|---|
-| P1 | Students at about 40 partner colleges | ~1 lakh [A: ~2,500 per large college] | Peer channels: 79–86% of registrants came, at ₹69–81 per attendee [D] |
+| P1 | Students at about 40 partner colleges | ~1 lakh [A: ~2,500 per large college] | Referrals and college partners: 79–86% of registrants came, at ₹69–81 per attendee [D] |
 | P2 | Other Bengaluru students | ~3.8 lakh | Reached through organic search, community groups and retargeting |
-| P3 | Young professionals aged 22–27 | Large | Only as "+1" friends on crew passes |
-| Avoid | Out-of-city students | – | Travel makes show-up low and cost high |
+| P3 | Young professionals aged 22–27 | Large | Only as friends of registrants, via crew passes |
+| Avoid | Out-of-city students | – | Travel risk [A]. The data has no city field, so this can't be tested |
 
 ### 3.3 Planning assumptions [A]
 | Assumption | Value | Why |
@@ -161,7 +170,7 @@ On top of that, crew friends and walk-ins are added.
 | | 2025 [D] | 2027 base [A] | 2027 stretch [A] |
 |---|---|---|---|
 | Reach (impressions) | 1.03M | 1.12M | 1.28M |
-| Identified people | 3,500 | 4,378 | 5,037 |
+| Identified via campaigns | 3,500 | 4,378 | 5,037 |
 | Registrations | 2,800 | 3,698 | 4,270 |
 | Registrants who came | 69% | 77% | 87% |
 | Registered attendees | 1,925 | 2,836 | 3,736 |
@@ -170,24 +179,37 @@ On top of that, crew friends and walk-ins are added.
 | **Unique attendees** | **2,050** | **3,017** | **4,799** |
 | ₹ per attendee | ₹134 | ₹166 | ₹104 |
 
-**Base case: 3,000 (1.5x).** This comes from moving the budget to peer channels alone, at 2025 rates. Each attendee above 2025 costs ₹234: ₹2.26L more spend for 967 more attendees. That's diminishing returns stated openly.
+**Base case: 3,000 (1.5x; the model gives 3,017).** This comes from moving the budget to peer channels alone, at 2025 rates, with no new levers. The share of registrants who come rises from 69% to 77% only because money moves to channels where more registrants came. Each attendee above 2025 costs ₹234: ₹2.26L more spend for 967 more attendees. That's diminishing returns stated openly.
 
-**Stretch: 4,800 (2.3x).** The bridge from base to stretch:
+"Identified via campaigns" counts people who gave their details through a campaign. The 125 walk-ins were identified only at the gate, which is why the Overview's total of identified people is 3,625.
+
+**Stretch: 4,800 (2.3x; the model gives 4,799), on the same ₹5L.** The bridge from base to stretch shows what must go right:
 
 | Step | Attendees |
 |---|---|
 | Base case | 3,017 |
-| Peer channels stay cheaper at scale (e = 0.25) | +463 |
+| Costs rise more slowly as spend grows (e = 0.25 instead of 0.4, all channels) | +463 |
 | Show-up engine (registrants who came +8 points, capped at 92%; waitlist recovered) | +437 |
-| Crew passes (15% of registrants × 1.5 friends × 80% come) | +583 |
+| Crew passes (15% of non-referral registrants × 1.5 friends × 80% come; referral registrants are left out to avoid double counting) | +583 |
 | Walk-ins rise from 6% to 10% | +299 |
 | **Stretch** | **4,799** |
 
 **Capacity:**
-- The ceiling is 4,000 per day × 2 days ÷ 1.35 visits per person = **5,910 unique attendees**. The 1.35 comes from 35% of attendees coming on both days [D].
+- The ceiling is 4,000 per day [A] × 2 days ÷ 1.35 visits per person = **about 5,900 unique attendees** (5,926 with 1.35 rounded; 5,910 with the exact 725 ÷ 2,050). The 1.35 comes from 35% of attendees coming on both days [D].
 - At 2025's day split (70% of attendees present on day 1), the stretch target puts about **3,347 people on day 1**, which is 84% of the cap.
 
 **Weakest assumption: the crew loop.** It's tested first (Slide 3).
+
+**Sensitivity to the least data-backed assumption** (the diminishing-returns exponent e; everything else unchanged):
+
+| e | Base | Stretch levers with this e |
+|---|---|---|
+| 0.25 | 3,509 | 4,799 |
+| **0.40 (base)** | **3,017** | 4,146 |
+| 0.60 | 2,483 | 3,434 |
+| 1.00 | 1,719 | 2,410 |
+
+If costs rise faster than assumed, the base falls towards 2,500. That is why Slide 3's pace rule checks registrations against the 2025 curve at week 3 and moves money before it's too late.
 
 ### 3.5 Prioritization (Slide 2)
 
@@ -219,29 +241,32 @@ On top of that, crew friends and walk-ins are added.
 - A celebrity paid from the marketing budget.
 
 ### 3.6 Thresholds (Slide 3)
-Each bet has an early signal and numeric **scale / change / stop** lines, checked at gates in weeks 3, 6 and 9. For example, the crew loop scales at 15% or more of registrants bringing a friend, and stops below 8% at week 3.
+Each bet has an early signal and numeric **scale / change / stop** lines, checked at gates in weeks 3, 6 and 9. **Scale line = the model's assumption for that bet is holding; stop line ≈ half of it.** For example, the model assumes 15% of registrants bring a friend, so the crew loop scales at 15% or more and stops below 8% at week 3. For college squads, 40 colleges × 25 registrations ≈ the 1,000 squad registrations the model assumes (962 in the base case).
 
-**Pace rule [D]:** in 2025, 30 / 46 / 65 / 90% of registrations had arrived by weeks 3 / 5 / 7 / 9. Applied to the base target, the checkpoints are 1,110 / 1,700 / 2,400 / 3,330. Below 85% of a checkpoint, budget is reallocated.
+**Pace rule [D]:** in 2025, 30 / 46 / 65 / 90% of registrations had arrived by weeks 3 / 5 / 7 / 9, counting back from fest week (week 10). Applied to the ~3,700 registrations in the base plan, the checkpoints are 1,110 / 1,700 / 2,400 / 3,330. Below 85% of a checkpoint, budget is reallocated. A day-1 forecast above 3,600 (90% of the cap) triggers day-specific passes.
+
+All of this runs live on the app's **Bets & signals** page (§4).
 
 ---
 
 ## 4. The product
 
-Next.js app with these pages. A date picker in the header sets **"Data as of end of"** for every page and for the copilot.
+Next.js app. The menu has three groups: **2025 results** (the evidence), **2027 plan** (the deck's bets, tracked live) and **Run it** (tasks and the audit trail). A date picker in the header sets **"Data as of end of"** for the 2025 pages and the copilot.
 
 | Page | What it does |
 |---|---|
-| **Overview** | KPIs vs the targets in force (attendees, registrations, identified people, budget); the two-part funnel (anonymous traffic, then identified people); registrations vs the target pace; a run-rate projection before the event or actuals after; why registrants were lost; a summary of the counting rules applied |
+| **Overview** | KPIs vs the targets in force (attendees, registrations, identified people, budget); the two-part funnel (anonymous traffic, then people identified via campaigns → registered → attended, plus walk-ins); registrations vs the target pace; a run-rate projection before the event or actuals after; why registrants were lost; a summary of the counting rules applied |
 | **Campaigns** | A per-campaign table: spend, budget used, identified, registered, attended, ₹ per registration, ₹ per attendee, share who came, the **Scale / Change / Stop** call (hover for reasons), and the weakest stage vs average. Also lets you create campaigns. |
 | **Campaign page** | Edit the plan (status, planned budget, owner, notes); add and edit tasks; **edit, add or delete daily marketing rows**; a daily chart; stage conversion vs all campaigns |
 | **Diagnose** | A stage-conversion heatmap vs the all-campaign rate; spend share vs attendee share; which engagement actions predict showing up; each campaign's bottleneck |
-| **Plan & decide** | A budget reallocation simulator (the deck's model, fed live campaign data, with assumption sliders); **editable scale/change/stop rules** that re-classify campaigns immediately; new target versions with effective dates |
+| **Budget & rules** | A budget reallocation simulator (the same formulas as the deck's model, fed live campaign data, with assumption sliders; at actual spend it reproduces the actual 2,050); **editable scale/change/stop rules** that re-classify campaigns immediately; new target versions with effective dates |
+| **Bets & signals** (2027 plan) | The deck's five bets with budget, owner role and weeks. Type each bet's weekly signal and get a live **Scale / Change / Stop** label from Slide 3's lines (editable), plus the next action and a **Make this a task** button. Also shows registration pace against the 2025 curve, the attendance forecast, the day-1 peak against the venue cap, and a budget check that says what to cut if the budget shrinks. The budget, venue cap and planned registrations are editable constraints. It ships with a **simulated week-3 example**, clearly labelled, so every label can be seen working |
 | **Tasks** | Create, edit, filter and close tasks (owner, campaign, due date, priority, status); overdue tasks are highlighted; tasks from the copilot are labelled |
 | **Data & audit** | Source and storage details, the counting rules, a change log of every edit, and **reset to the original dataset** |
 
 **Saved changes update everything.** Every write goes through validated API routes ([`src/lib/mutations.ts`](src/lib/mutations.ts)) and is recorded in the change log. Every page and the copilot recalculate from the stored data.
 
-**Scale / Change / Stop rules** (editable defaults in Plan & decide):
+**Scale / Change / Stop rules for 2025 campaigns** (editable defaults in Budget & rules):
 - **After the event:** Scale if cost per attendee is ₹100 or less **and** at least 75% of registrants came. Stop if cost per attendee is ₹200 or more **or** fewer than 55% came. Otherwise Change.
 - **Before the event:** Scale if cost per registration is ₹80 or less. Stop if it's ₹150 or more. Otherwise Change.
 - A campaign with fewer than 20 registrations is marked "not enough data".
@@ -255,17 +280,18 @@ Next.js app with these pages. A date picker in the header sets **"Data as of end
 1. **Overview:** attendees 2,050 vs a target of 2,200, and 875 registrants lost.
 2. **Campaigns:** Paid Social and Creators are marked **Stop** (₹274 and ₹337 per attendee, half of registrants came).
 3. **Diagnose:** Paid Social's weakest stage is impressions → clicks (2.1% vs 3.1%). Brochure downloads predict attendance.
-4. **Plan & decide:** move ₹30k from Creators to Referrals. The simulator shows about +129 attendees.
-5. **Copilot:** *"Create a task for the Creator Partners owner to switch creator deals to pay-per-registration, due 2025-03-10."* It drafts the task, you click **Confirm**, and it appears in **Tasks**, tagged "created via copilot".
-6. **Change data and see it update:** on a campaign page, add ₹50,000 to a Paid Social daily row. The spend KPIs, the campaign's ₹ per attendee and the copilot's answers all update.
-7. **Data & audit:** every change is logged. **Reset** restores the original data.
+4. **Budget & rules:** move ₹30k from Creators to Referrals. The simulator shows about +129 attendees.
+5. **Bets & signals:** Bet 4 (ambassadors) reads 0.8 registrations per ambassador per week, below its stop line of 1, so it is labelled **Stop**: "drop the bottom half; move the money to Bet 3". Click **Make this a task**. Type 16 for Bet 1 and it turns to **Scale**.
+6. **Copilot:** *"Create a task for the Creator Partners owner to switch creator deals to pay-per-registration, due 2025-03-10."* It drafts the task, you click **Confirm**, and it appears in **Tasks**, tagged "created via copilot".
+7. **Change data and see it update:** on a campaign page, add ₹50,000 to a Paid Social daily row. The spend KPIs, the campaign's ₹ per attendee and the copilot's answers all update.
+8. **Data & audit:** every change is logged. **Reset** restores the original data.
 
 ---
 
 ## 5. The AI copilot
 
 ### 5.1 Design
-The copilot is a tool-calling agent ([`agent.ts`](src/lib/copilot/agent.ts)). The language model never sees raw tables: it asks for numbers through **11 tools** ([`tools.ts`](src/lib/copilot/tools.ts)) that run the **same engine as the dashboard** on the currently stored data.
+The copilot is a tool-calling agent ([`agent.ts`](src/lib/copilot/agent.ts)). The language model never sees raw tables: it asks for numbers through **12 tools** ([`tools.ts`](src/lib/copilot/tools.ts)) that run the **same engine as the dashboard** on the currently stored data.
 
 | Tool | Purpose |
 |---|---|
@@ -276,6 +302,7 @@ The copilot is a tool-calling agent ([`agent.ts`](src/lib/copilot/agent.ts)). Th
 | `get_timeseries` | Daily or weekly series for 8 metrics, optionally per campaign |
 | `query_records` | **A flexible filter/group/aggregate tool** over the cleaned person-level tables, for questions nobody anticipated |
 | `get_tasks` | Tasks, open and overdue counts |
+| `get_plan_2027` | The 2027 bets with their readings, thresholds, live labels and next actions; pace, forecast, day-1 peak vs cap, budget. Says when the readings are the simulated example |
 | `simulate_budget` | The planner's model, labelled as an estimate |
 | `calculate` | **An exact calculator** (a safe expression parser, no `eval`) |
 | `propose_task`, `propose_campaign_update` | **Draft** an action. Nothing is saved until the user clicks **Confirm** in the chat. |
@@ -289,6 +316,10 @@ The copilot is a tool-calling agent ([`agent.ts`](src/lib/copilot/agent.ts)). Th
   - when the data can't answer, the copilot says so *first*, names what's missing and offers the closest question it can answer
   - "why" questions are answered with what the data shows, not invented causes
   - scale/change/stop answers report the *official* rule-based decision
+- **Phase-aware:** after the 2025 event, it frames findings as lessons for the 2027 bets instead of "stop spending now".
+- **Names only what the tools returned:** no generic channels (e.g. "email" or "influencers" as campaigns) that are not in the data.
+- **Task requests become real drafts:** if a model writes a task as text instead of drafting it, the agent asks once more for the draft, so there is always a **Confirm** button.
+- **Simulated data is always flagged:** if an answer uses the example 2027 readings and doesn't say so, the agent adds the note itself.
 - **The copilot can't write data itself.** It only drafts proposals; saving goes through the normal API after the user confirms.
 - **Transparency:** every answer shows a "How I got this" panel listing each tool call with its arguments and result, plus the model and token count used.
 
@@ -304,6 +335,9 @@ The copilot is a tool-calling agent ([`agent.ts`](src/lib/copilot/agent.ts)). Th
 - If a model is busy, out of quota or not offered to the key, the copilot moves to the next one.
 - Short per-minute rate limits are waited out (up to 15 s) rather than downgrading the model.
 - Every call has a timeout, and each answer has a 55-second deadline (inside Vercel's 60-second limit). If time runs out, it says so plainly instead of spinning.
+- Optional tool arguments accept `null`, and a malformed tool call (a 400 from the provider's schema check) is retried on the same model, because it is random.
+- When every model is briefly rate-limited, the chat shows "busy, retrying in N s" and **retries once automatically**. Technical details stay folded away under each error.
+- The "How I got this" panel shows which model answered and any model it fell back from.
 
 **Why Groq:**
 - Gemini's free tier for this key allowed only **20 requests per day** per model, and `gemini-2.5-flash` is retired for new keys. During testing the quota ran out after about 8 questions.
@@ -314,7 +348,7 @@ The copilot is a tool-calling agent ([`agent.ts`](src/lib/copilot/agent.ts)). Th
 
 ## 6. Testing
 
-### 6.1 Automated tests (15, `npm test`)
+### 6.1 Automated tests (21, `npm test`)
 - **Engine** ([`engine.test.ts`](src/lib/engine.test.ts)):
   - the deduplication counts
   - 3,625 / 2,800 / 2,050 / 1,925 / 125 / 725, ₹2,74,000, 575 no-shows, 40 excluded admissions
@@ -328,6 +362,14 @@ The copilot is a tool-calling agent ([`agent.ts`](src/lib/copilot/agent.ts)). Th
   - time-series totals match the snapshot
   - the simulator spends the same total
   - proposals never save
+  - `get_plan_2027` returns five bets with live labels and flags the simulated readings
+- **2027 plan** ([`plan2027.test.ts`](src/lib/plan2027.test.ts)):
+  - labels follow the scale/stop lines
+  - the pace curve reproduces 1,110 / 1,702 / 2,405 / 3,330 at weeks 3 / 5 / 7 / 9
+  - the shipped example gives Change / Scale / Stop, a balanced ₹5L budget, on-track pace and a ceiling of 5,926
+  - changed constraints: a smaller budget names Bet 5 as the first cut, slow pace says "behind", and a smaller venue cap raises the day-1 alert
+  - bad input is rejected with readable messages
+- **Engine:** 3,500 people identified via campaigns + 125 walk-ins = 3,625
 
 The expected values were computed **independently in Python/pandas** from the original xlsx.
 
@@ -353,6 +395,9 @@ The expected values were computed **independently in Python/pandas** from the or
 - Reset restores the original data.
 - The production build (`next build`) passes.
 
+### 6.4 Independent review before submission
+Two separate AI reviewers were given only the brief, the deck PDF, the README and the live link. They used different models, different roles and no shared context: one was a line-by-line brief auditor that recomputed 48 numbers from the raw xlsx, and the other was a hiring manager testing the live product. Their findings were checked against the data before anything was changed. What was fixed is listed in §10.
+
 ---
 
 ## 7. Setup
@@ -363,7 +408,7 @@ Requirements: Node 20+ (tested on Node 24).
 npm install
 cp .env.example .env        # then paste at least one AI key (see below)
 npm run dev                 # http://localhost:3000
-npm test                    # 15 tests
+npm test                    # 21 tests
 npm run build && npm start  # production build
 ```
 
@@ -425,6 +470,9 @@ python scripts/convert_dataset.py "data/original/Attendee Dataset.xlsx" data/see
   - Free-tier rate limits allow about two questions a minute; faster bursts may briefly fail with a clear message.
   - The backup model (`gpt-oss-20b`) is weaker and can make small slips, which is why every answer shows its data look-ups.
   - Answers are generated, so their wording varies between runs.
+- **The 2027 readings are an example** until the team types real ones; the app and the copilot label them as simulated.
+- **Base-case sensitivity:** the base depends most on the diminishing-returns exponent (§3.4 table). The pace rule is the safeguard.
+- **Open by design:** there are no logins, so reviewers can change data and constraints as the brief suggests. Anyone with the link can also press Reset, which restores the original dataset.
 - **One process, no logins.** Concurrent edits from many users aren't coordinated beyond one write at a time per process.
 - **Next.js dev overlay:** a browser extension that adds attributes (e.g. `fdprocessedid`) can trigger a harmless "hydration mismatch" notice. It appears only in development.
 
@@ -432,6 +480,17 @@ python scripts/convert_dataset.py "data/original/Attendee Dataset.xlsx" data/see
 - **Day-1 attendance:** an early draft counted 1,905 day-1 check-in *records* as people (93%). The tested engine shows **1,430 distinct people (70%)**. The deck was corrected: the stretch target's day-1 peak is about 3,350, within the cap, and Bet 5 was reframed as walk-in capture.
 - **Gemini model and quota:** `gemini-2.5-flash` is retired for new keys, and the free quota was too small, hence the switch to Groq.
 - **Grounding:** one backup model answered without tools and invented numbers. Required tool calls on the first step, and removing that model, fixed it.
+- **After the independent review (§6.4):**
+  - Email opt-out was stated as 16%. It is **13% of emailed people** (229 opt-outs ÷ 1,400 emailed counted 51 people who were never emailed).
+  - The venue cap (4,000 a day) was tagged as data; it is an **assumption** and is now tagged [A].
+  - The crew formula now says **non-referral** registrants, which is what the model uses.
+  - "Identified people" meant 3,500 on the slide and 3,625 on the Overview. Both now say what they count: **identified via campaigns (3,500)**, plus 125 walk-ins identified at the gate.
+  - The simulator showed 2,048 at actual spend (6% walk-in assumption vs the actual 6.1%). It now defaults to the actual share and shows **2,050**.
+  - Out-of-city claims are now labelled as untested assumptions (the data has no city field).
+  - Slide 2 now shows each bet's five criterion scores, and its last row shows both base and stretch.
+  - Slide 3 now says where the thresholds come from, defines its terms, and describes the dashboard as it is built.
+  - The copilot showed raw provider errors and sometimes failed on a malformed tool call. See §5.3 for the fixes.
+  - The deck promised a live label per bet; the **Bets & signals** page now provides it.
 
 ## 11. Sources
 - Deccan Herald, *Bangalore Urban district tops list with highest number of colleges* (AISHE): https://deccanherald.com/india/bangalore-urban-district-tops-list-with-highest-number-of-colleges-1186213.html

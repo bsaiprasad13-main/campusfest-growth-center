@@ -5,14 +5,26 @@ import { useApp } from "./AppProvider";
 import { Copilot } from "./Copilot";
 import { PHASE_LABEL } from "@/lib/format";
 
-const NAV = [
-  { href: "/", label: "Overview" },
-  { href: "/campaigns", label: "Campaigns" },
-  { href: "/diagnose", label: "Diagnose" },
-  { href: "/plan", label: "Plan & decide" },
-  { href: "/tasks", label: "Tasks" },
-  { href: "/data", label: "Data & audit" },
+const GROUPS = [
+  {
+    title: "2025 results (the data)",
+    items: [
+      { href: "/", label: "Overview" },
+      { href: "/campaigns", label: "Campaigns" },
+      { href: "/diagnose", label: "Diagnose" },
+      { href: "/plan", label: "Budget & rules" },
+    ],
+  },
+  { title: "2027 plan", items: [{ href: "/plan-2027", label: "Bets & signals" }] },
+  {
+    title: "Run it",
+    items: [
+      { href: "/tasks", label: "Tasks" },
+      { href: "/data", label: "Data & audit" },
+    ],
+  },
 ];
+const NAV = GROUPS.flatMap((g) => g.items);
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
@@ -23,17 +35,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <aside className="hidden w-56 shrink-0 flex-col border-r border-stone-200 bg-slate-900 text-stone-100 md:flex">
         <div className="px-4 py-5">
           <p className="text-xs font-semibold tracking-widest text-orange-300">GROWTH CENTER</p>
-          <p className="mt-1 text-sm text-stone-300">{s?.event.name ?? "CampusFest"} · attendee growth</p>
+          <p className="mt-1 text-sm text-stone-300">CampusFest attendee growth: 2025 data → 2027 plan</p>
         </div>
         <nav className="flex flex-col gap-0.5 px-2">
-          {NAV.map((n) => {
-            const active = n.href === "/" ? path === "/" : path.startsWith(n.href);
-            return (
-              <Link key={n.href} href={n.href} className={`rounded-lg px-3 py-2 text-sm ${active ? "bg-white/10 font-semibold text-white" : "text-stone-300 hover:bg-white/5"}`}>
-                {n.label}
-              </Link>
-            );
-          })}
+          {GROUPS.map((g) => (
+            <div key={g.title} className="mb-2">
+              <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-stone-500">{g.title}</p>
+              {g.items.map((n) => {
+                const active = n.href === "/" ? path === "/" : path === n.href || path.startsWith(n.href + "/");
+                return (
+                  <Link key={n.href} href={n.href} className={`block rounded-lg px-3 py-2 text-sm ${active ? "bg-white/10 font-semibold text-white" : "text-stone-300 hover:bg-white/5"}`}>
+                    {n.label}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
         <div className="mt-auto px-4 py-4 text-xs text-stone-400">Storage: {state?.storage ?? "…"}</div>
       </aside>
@@ -44,6 +61,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Link key={n.href} href={n.href} className="whitespace-nowrap rounded px-2 py-1 text-xs text-slate-700 hover:bg-stone-100">{n.label}</Link>
             ))}
           </nav>
+          {path.startsWith("/plan-2027") ? (
+            <span className="text-sm text-slate-600">CampusFest 2027 · Bengaluru · 10–11 Apr 2027</span>
+          ) : (
           <label className="flex items-center gap-2 text-sm text-slate-600">
             <span>Data as of end of</span>
             <input
@@ -56,7 +76,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             />
             <span className="text-xs text-slate-400">IST</span>
           </label>
-          {s && (
+          )}
+          {s && !path.startsWith("/plan-2027") && (
             <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-slate-700">
               {PHASE_LABEL[s.event.phase]}
               {s.event.phase === "pre_event" ? ` · ${s.event.days_to_event} days to go` : ""}

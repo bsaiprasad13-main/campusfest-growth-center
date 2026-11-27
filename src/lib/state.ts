@@ -1,6 +1,7 @@
 import { computeSnapshot } from "./engine";
 import { listOwners } from "./mutations";
 import { getApp, getDataset, storageName } from "./store";
+import { defaultPlan2027, evaluatePlan } from "./plan2027";
 
 export async function loadState(asOf?: string | null) {
   const [ds, app] = await Promise.all([getDataset(), getApp()]);
@@ -14,6 +15,8 @@ export async function loadState(asOf?: string | null) {
     tasks: app.tasks,
     plans: app.plans,
     settings: app.settings,
+    plan2027: evaluatePlan(app.plan2027 ?? defaultPlan2027()),
+    plan2027_inputs: app.plan2027 ?? defaultPlan2027(),
     audit: app.audit.slice(0, 40),
     owners: listOwners(ds.campaigns),
     targets_history: ds.targets,

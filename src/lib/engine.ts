@@ -166,6 +166,7 @@ export interface Snapshot {
   targets: TargetRow | null;
   totals: {
     identified_people: number;
+    identified_via_campaigns: number; // people whose first touch was a campaign (excludes walk-ins identified at the gate)
     identified_by_source: Record<string, number>;
     registrations: number;
     status_counts: Record<string, number>;
@@ -517,8 +518,8 @@ export function computeSnapshot(raw: Dataset, app: AppState, asOf?: string): Sna
       projected_unique_attendees: projAtt,
       assumptions: [
         `Registrations continue at the last-14-day average (${last14.toFixed(1)} per day) for ${daysToEvent} more days.`,
-        `${(settings.assumed_show_rate * 100).toFixed(0)}% of registrants attend (assumption, editable in Plan & decide).`,
-        `Walk-ins add ${(settings.assumed_walkin_share * 100).toFixed(0)}% of attendees (assumption, editable in Plan & decide).`,
+        `${(settings.assumed_show_rate * 100).toFixed(0)}% of registrants attend (assumption, editable in Budget & rules).`,
+        `Walk-ins add ${(settings.assumed_walkin_share * 100).toFixed(0)}% of attendees (assumption, editable in Budget & rules).`,
       ],
     };
   } else {
@@ -544,6 +545,7 @@ export function computeSnapshot(raw: Dataset, app: AppState, asOf?: string): Sna
     targets: target,
     totals: {
       identified_people: people.length,
+      identified_via_campaigns: people.filter((p) => p.first_campaign_id).length,
       identified_by_source: identifiedBySource,
       registrations: regByPerson.size,
       status_counts: statusCountsTotal,

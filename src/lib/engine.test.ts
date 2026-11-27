@@ -19,6 +19,7 @@ describe("final snapshot (2025-04-20)", () => {
   it("counts the funnel like the source rules say", () => {
     expect(s.event.phase).toBe("post_event");
     expect(s.totals.identified_people).toBe(3625);
+    expect(s.totals.identified_via_campaigns).toBe(3500); // the other 125 are walk-ins identified at the gate
     expect(s.totals.registrations).toBe(2800);
     expect(s.totals.unique_attendees).toBe(2050);
     expect(s.totals.registered_attendees).toBe(1925);

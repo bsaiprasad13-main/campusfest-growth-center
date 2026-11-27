@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { computeSnapshot } from "../engine";
 import { initialAppState, loadSeedDataset } from "../seed";
+import { defaultPlan2027, evaluatePlan } from "../plan2027";
 import type { LoadedState } from "../state";
 import { calculate } from "./calc";
 import { runTool, type ToolCtx } from "./tools";
@@ -12,7 +13,7 @@ const ctx = (asOf = "2025-04-20"): ToolCtx => ({
   defaultAsOf: asOf,
   proposals: [],
   load: async (d?: string) =>
-    ({ snapshot: computeSnapshot(ds, app, d ?? asOf), tasks: app.tasks, plans: app.plans, settings: app.settings, audit: [], owners, targets_history: ds.targets, storage: "test", ds, app }) as LoadedState,
+    ({ snapshot: computeSnapshot(ds, app, d ?? asOf), tasks: app.tasks, plans: app.plans, settings: app.settings, plan2027: evaluatePlan(app.plan2027 ?? defaultPlan2027()), plan2027_inputs: app.plan2027 ?? defaultPlan2027(), audit: [], owners, targets_history: ds.targets, storage: "test", ds, app }) as LoadedState,
 });
 
 describe("calculate", () => {
@@ -72,5 +73,15 @@ describe("other tools", () => {
     expect(c.proposals).toHaveLength(1);
     expect(c.proposals[0].payload.owner_id).toBe("T04");
     expect(app.tasks).toHaveLength(0);
+  });
+});
+
+describe("get_plan_2027", () => {
+  it("returns the bets with live labels and flags simulated readings", async () => {
+    const r = (await runTool("get_plan_2027", {}, ctx())) as { note: string; bets: { bet: string; label: string }[]; label_counts: Record<string, number> };
+    expect(r.note).toMatch(/SIMULATED/);
+    expect(r.bets).toHaveLength(5);
+    expect(r.bets.find((b) => b.bet.startsWith("Bet 4"))!.label).toBe("stop");
+    expect(r.label_counts.scale).toBe(1);
   });
 });

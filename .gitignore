@@ -43,3 +43,6 @@ next-env.d.ts
 # app data written at runtime
 /data/store/
 !.env.example
+
+# python
+__pycache__/

@@ -15,5 +15,6 @@ export const DECISION_STYLE: Record<string, { label: string; cls: string }> = {
   change: { label: "Change", cls: "bg-amber-100 text-amber-900 border-amber-300" },
   stop: { label: "Stop", cls: "bg-orange-100 text-orange-900 border-orange-400" },
   insufficient_data: { label: "Not enough data", cls: "bg-stone-100 text-stone-700 border-stone-300" },
+  no_reading: { label: "No reading yet", cls: "bg-stone-100 text-stone-700 border-stone-300" },
 };
 export const PHASE_LABEL = { pre_event: "Before the event", during_event: "During the event", post_event: "After the event" } as const;

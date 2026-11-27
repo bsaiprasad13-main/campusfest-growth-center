@@ -18,27 +18,37 @@ export interface TraceStep {
   summary: string;
 }
 
+/** Thrown when the AI service cannot answer. `retryAfterS` is set when waiting briefly should fix it. */
+export class CopilotUnavailable extends Error {
+  constructor(message: string, public detail: string, public retryAfterS: number | null) {
+    super(message);
+  }
+}
+
 export interface AgentResult {
   answer: string;
   trace: TraceStep[];
   proposals: Proposal[];
   model?: string;
   tokens?: number; // total tokens used across all model calls for this answer
+  fallbacks?: string[]; // models that failed before the one that answered
 }
 
+const wantsTask = (m: string) => /\b(task|to-?do|action item)s?\b/i.test(m) && /\b(create|draft|make|add|assign|log|set up|turn)\b/i.test(m);
+
 function systemPrompt(asOf: string, phase: string, today: string) {
-  return `You are the Growth Analyst copilot for CampusFest attendee growth (fictional 2-day fest, 12–13 Apr 2025; records 15 Jan–20 Apr 2025, plus the team's tasks, plans and rules). App snapshot date: ${asOf} (end of day IST, phase: ${phase}). Today: ${today}. North star: unique verified external attendees.
+  return `You are the Growth Analyst copilot for CampusFest attendee growth. Data: the 2025 edition (fictional 2-day fest, 12–13 Apr 2025; records 15 Jan–20 Apr 2025), the team's tasks and rules, and the 2027 plan (five bets with weekly readings, thresholds, pace and forecast: get_plan_2027). App snapshot date: ${asOf} (end of day IST, 2025 phase: ${phase}). Today: ${today}. North star: unique verified external attendees.
 
 Rules:
-1. Every number, campaign, owner and rate must come from a tool result in this conversation; never mention a campaign or figure the tools did not return, and never compute rates yourself (use tool values or calculate). Data can change at any time: re-fetch, never rely on memory or general knowledge.
+1. Every number, campaign, bet, owner and rate must come from a tool result in this conversation. Name only campaigns, channels and bets that a tool returned; never cite channels that are not in the data (e.g. email or influencers as campaigns). Never compute rates yourself (use tool values or calculate). Data can change at any time: re-fetch, never rely on memory or general knowledge.
 2. Use calculate for any arithmetic beyond reading a value; show the formula.
 3. Label **Evidence** (data, metric name), **Assumption** (not in data: estimates, causes) and **Recommendation**.
-4. If the data cannot answer (e.g. college, city, demographics, revenue, ticket price, satisfaction, capacity, or WHY something happened, such as creative quality), say so in the first sentence ("The data shows what happened, not why"), name what's missing, offer the closest answerable question. Unsure? get_data_dictionary. Flag thin evidence (small counts, correlation, pre-event).
-5. Scale/change/stop: report the official decision and reasons from get_campaigns (team rules); add your own view only if clearly labelled as yours.
-6. Before the event there is no attendance; projections are estimates. Budget moves: simulate_budget, labelled a model estimate.
+4. If the data cannot answer (e.g. college, city, demographics, revenue, ticket price, satisfaction, or WHY something happened, such as creative quality), say so in the first sentence ("The data shows what happened, not why"), name what's missing, offer the closest answerable question. Unsure? get_data_dictionary. Flag thin evidence (small counts, correlation, pre-event).
+5. Scale/change/stop: for 2025 campaigns report the official decision and reasons from get_campaigns; for 2027 bets use get_plan_2027 labels. Add your own view only if clearly labelled as yours.
+6. Phase: when the 2025 event is over, its campaigns cannot be changed any more: frame 2025 findings as lessons and link them to the 2027 bets (get_plan_2027), never "stop spending now". Before the event there is no attendance; projections are estimates. Budget moves: simulate_budget, labelled a model estimate. If get_plan_2027 says its readings are simulated, say so.
 7. When asked to create a task or change a campaign (or the user agrees), call propose_task / propose_campaign_update. It is only a draft shown below your answer for the user to Confirm; never say it was created.
 8. Resolve follow-ups from the conversation.
-9. Style: direct answer first, then short bullets or a small table. Money as ₹ with Indian grouping, no decimals (₹81, ₹2,74,000); percentages with one decimal; campaign names, not IDs. Concise. Call tools only via function calling.`;
+9. Style: direct answer first, then short bullets or a small table. "Came" or show rate = registrants who attended ÷ registrations. Money as ₹ with Indian grouping, no decimals (₹81, ₹2,74,000); percentages with one decimal; campaign names, not IDs. Concise. Call tools only via function calling.`;
 }
 
 function summarize(result: unknown): string {
@@ -53,7 +63,10 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export async function runAgent(history: ChatTurn[], message: string, asOf: string | undefined): Promise<AgentResult> {
   const providers = configuredProviders();
   if (!providers.length) throw new Error("NO_KEY");
-  const candidates: { p: Provider; model: string }[] = providers.flatMap((p) => p.models.map((model) => ({ p, model })));
+  // Small models (e.g. gpt-oss-20b, *-lite) make more analysis slips, so every larger model is tried first.
+  const isSmall = (m: string) => /(^|[-/])(\d{1,2}b|mini|lite|nano)(\b|-|$)/i.test(m);
+  const all = providers.flatMap((p) => p.models.map((model) => ({ p, model })));
+  const candidates: { p: Provider; model: string }[] = [...all.filter((c) => !isSmall(c.model)), ...all.filter((c) => isSmall(c.model))];
   let ci = 0;
   const failures: string[] = [];
   // Whole answer must finish inside the host's request limit (Vercel: 60 s).
@@ -81,6 +94,8 @@ export async function runAgent(history: ChatTurn[], message: string, asOf: strin
   ];
   const trace: TraceStep[] = [];
   let waits = 0;
+  let schemaRetries = 0;
+  let shortestRetryMs: number | null = null;
 
   async function callModel(requireTool: boolean) {
     while (ci < candidates.length) {
@@ -100,8 +115,15 @@ export async function runAgent(history: ChatTurn[], message: string, asOf: strin
         continue;
       }
       if (r.ok) return { ...r, provider: p.id, model };
-      // A short per-minute limit: waiting a few seconds beats falling back to a weaker model.
-      if (r.status === 429 && r.retryAfterMs != null && r.retryAfterMs <= 15000 && waits < 3 && deadline - Date.now() > r.retryAfterMs + 8000) {
+      // The model produced a malformed tool call (provider-side schema check). It is random: ask the same model again.
+      if (r.status === 400 && /tool call validation|tool_use_failed|failed to call a function|did not match schema/i.test(r.message) && schemaRetries < 2) {
+        schemaRetries++;
+        await sleep(400);
+        continue;
+      }
+      if (r.status === 429 && r.retryAfterMs != null) shortestRetryMs = Math.min(shortestRetryMs ?? Infinity, r.retryAfterMs);
+      // A short per-minute limit: waiting beats falling back to a weaker model.
+      if (r.status === 429 && r.retryAfterMs != null && r.retryAfterMs <= 30000 && waits < 3 && deadline - Date.now() > r.retryAfterMs + 12000) {
         waits++;
         await sleep(r.retryAfterMs + 250);
         continue;
@@ -116,20 +138,26 @@ export async function runAgent(history: ChatTurn[], message: string, asOf: strin
       ci++;
       await sleep(250);
     }
-    const allQuota = failures.length > 0 && failures.every((f) => /quota|limit|not available/.test(f));
-    throw new Error(
-      allQuota
-        ? `The AI service's quota for the configured keys is used up (${failures.join("; ")}). The dashboard and all other features still work. Try again after the limit resets, or add billing / another key.`
-        : `The AI service could not answer right now (${failures.join("; ")}). Please try again in a minute.`,
-    );
+    const detail = failures.join("; ");
+    if (failures.some((f) => /daily free quota/.test(f)) && failures.every((f) => /quota|limit|not available/.test(f))) {
+      throw new CopilotUnavailable("The free AI quota for today is used up. The dashboard, plan and tasks all still work; the copilot will answer again after the daily reset.", detail, null);
+    }
+    if (failures.every((f) => /rate or quota limit|overloaded|timed out/.test(f))) {
+      const s = Math.min(30, Math.max(5, Math.ceil((shortestRetryMs ?? 15000) / 1000) + 1));
+      throw new CopilotUnavailable("The free AI tier is busy (per-minute limit).", detail, s);
+    }
+    throw new CopilotUnavailable("The AI service could not answer this time. Please try again.", detail, 10);
   }
 
   let usedModel: string | undefined;
   let tokens = 0;
+  let nudged = false;
+  let requireNext = true; // first step must look up data: no answer from memory alone
   for (let round = 0; round < 10; round++) {
     let r;
     try {
-      r = await callModel(round === 0); // first step must look up data: no answer from memory alone
+      r = await callModel(requireNext);
+      requireNext = false;
     } catch (e) {
       if (e instanceof Error && e.message === "DEADLINE") {
         return {
@@ -146,7 +174,19 @@ export async function runAgent(history: ChatTurn[], message: string, asOf: strin
     tokens += r.tokens ?? 0;
     msgs.push({ role: "assistant", text: r.text, toolCalls: r.toolCalls, raw: r.raw ? { provider: r.provider, data: r.raw } : undefined });
     if (!r.toolCalls.length) {
-      return { answer: r.text.trim() || "(no answer)", trace, proposals: ctx.proposals, model: usedModel, tokens };
+      // The user asked for a task but the model wrote it as text: ask once for the real draft (it needs a Confirm button).
+      if (wantsTask(message) && ctx.proposals.length === 0 && !nudged) {
+        nudged = true;
+        requireNext = true;
+        msgs.push({ role: "user", text: "Now call propose_task with that task (title, description, campaign or owner, due_date, priority). Do not write the task as text; reply with one short sentence after the call." });
+        continue;
+      }
+      let answer = r.text.trim() || "(no answer)";
+      // Honesty guard: never present the shipped example readings as real 2027 data.
+      if (trace.some((t) => t.tool === "get_plan_2027") && first.plan2027.simulated && !/simulat/i.test(answer)) {
+        answer += "\n\nNote: the 2027 bet readings used here are the app's simulated week-3 example, not real campaign data.";
+      }
+      return { answer, trace, proposals: ctx.proposals, model: usedModel, tokens, fallbacks: failures.length ? failures : undefined };
     }
     for (const c of r.toolCalls) {
       const result = await runTool(c.name, c.args, ctx);

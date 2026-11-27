@@ -12,6 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { initialAppState, loadSeedDataset } from "./seed";
+import { defaultPlan2027 } from "./plan2027";
 import type { AppState, Dataset, SourceTable } from "./types";
 import { SOURCE_TABLES } from "./types";
 
@@ -96,7 +97,10 @@ export async function getDataset(): Promise<Dataset> {
 
 export async function getApp(): Promise<AppState> {
   const a = await be().get<AppState>("app");
-  if (a) return a;
+  if (a) {
+    a.plan2027 ??= defaultPlan2027();
+    return a;
+  }
   const fresh = initialAppState(seedData());
   await be().set("app", fresh);
   return fresh;

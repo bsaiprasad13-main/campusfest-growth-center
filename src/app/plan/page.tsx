@@ -11,7 +11,7 @@ export default function Plan() {
   const [alloc, setAlloc] = useState<Record<string, number>>({});
   const [elasticity, setElasticity] = useState(0.4);
   const [uplift, setUplift] = useState(0);
-  const [walkin, setWalkin] = useState(0.06);
+  const [walkin, setWalkin] = useState<number | null>(null); // null = use the actual 2025 walk-in share
   const [rules, setRules] = useState<Record<string, string>>({});
   const [assumed, setAssumed] = useState({ show: "", walk: "" });
   const [tgt, setTgt] = useState({ effective_date: "", target_version: "", identified_external_people_goal: "", registration_goal: "", unique_external_visitors_goal: "", marketing_budget_inr: "" });
@@ -23,9 +23,15 @@ export default function Plan() {
     setAssumed({ show: String(state.settings.assumed_show_rate), walk: String(state.settings.assumed_walkin_share) });
   }, [state?.settings]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Default walk-in share = the actual share after the event (so "no change" reproduces the actual total), else the assumption in Settings.
+  const walkEff =
+    walkin ??
+    (s && s.event.phase === "post_event" && s.totals.unique_attendees > 0
+      ? s.totals.walk_in_attendees / s.totals.unique_attendees
+      : state?.settings.assumed_walkin_share ?? 0.06);
   const result = useMemo(
-    () => (s ? simulatePlan(s, { allocation: alloc, elasticity, show_uplift_pts: uplift, walkin_share: walkin, max_show_rate: 0.92 }) : null),
-    [s, alloc, elasticity, uplift, walkin],
+    () => (s ? simulatePlan(s, { allocation: alloc, elasticity, show_uplift_pts: uplift, walkin_share: walkEff, max_show_rate: 0.92 }) : null),
+    [s, alloc, elasticity, uplift, walkEff],
   );
   if (!state || !s || !result) return null;
   const target = s.targets;
@@ -38,14 +44,14 @@ export default function Plan() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-semibold">Plan & decide</h1>
+        <h1 className="text-2xl font-semibold">Budget & rules</h1>
         <p className="text-sm text-slate-500">Test budget moves before making them, and tune the rules behind every scale / change / stop call.</p>
       </div>
 
       <Card
         title="Budget reallocation simulator"
         subtitle="Uses each campaign's live cost per registration and show rate. Inputs marked [assumption] are not in the data."
-        right={<Button variant="secondary" onClick={() => setAlloc({})}>Reset to actual spend</Button>}
+        right={<Button variant="secondary" onClick={() => { setAlloc({}); setElasticity(0.4); setUplift(0); setWalkin(null); }}>Reset to actual</Button>}
       >
         <div className="mb-3 grid grid-cols-1 gap-3 md:grid-cols-3">
           <Field label={`Diminishing returns exponent [assumption]: ${elasticity}`}>
@@ -54,8 +60,8 @@ export default function Plan() {
           <Field label={`Show-rate uplift [assumption]: +${uplift} pts`}>
             <input type="range" min={0} max={15} step={1} value={uplift} onChange={(e) => setUplift(Number(e.target.value))} className="w-full" />
           </Field>
-          <Field label={`Walk-in share [assumption]: ${(walkin * 100).toFixed(0)}%`}>
-            <input type="range" min={0} max={0.2} step={0.01} value={walkin} onChange={(e) => setWalkin(Number(e.target.value))} className="w-full" />
+          <Field label={`Walk-in share [assumption]: ${(walkEff * 100).toFixed(1)}%${walkin == null ? " (2025 actual)" : ""}`}>
+            <input type="range" min={0} max={0.2} step={0.005} value={walkEff} onChange={(e) => setWalkin(Number(e.target.value))} className="w-full" />
           </Field>
         </div>
         <div className="overflow-x-auto">

@@ -77,7 +77,7 @@ export default function Campaigns() {
                   </td>
                   <td className="pr-3">{c.owner_name}</td>
                   <td className="pr-3 text-right tabular-nums">{inr(c.spend_inr)}</td>
-                  <td className="pr-3 text-right tabular-nums">{c.budget_used_pct == null ? <span className="text-xs text-slate-400">no budget set</span> : pct(c.budget_used_pct, 0)}</td>
+                  <td className="pr-3 text-right tabular-nums">{c.budget_used_pct == null ? <span className="text-slate-400" title="No planned budget set for this campaign (the 2025 data has none). Set one on the campaign page.">–</span> : pct(c.budget_used_pct, 0)}</td>
                   <td className="pr-3 text-right tabular-nums">{num(c.identified_people)}</td>
                   <td className="pr-3 text-right tabular-nums">{num(c.registrations)}</td>
                   <td className="pr-3 text-right tabular-nums">{post ? num(c.attendees) : "–"}</td>

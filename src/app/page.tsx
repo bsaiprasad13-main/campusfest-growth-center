@@ -58,7 +58,7 @@ export default function Overview() {
         <Kpi
           label="Identified people"
           value={num(t.identified_people)}
-          sub={tg ? `Target ${num(tg.identified_external_people_goal)} · ${pct(s.progress.identified_pct)}` : ""}
+          sub={`${tg ? `Target ${num(tg.identified_external_people_goal)} · ${pct(s.progress.identified_pct)}` : ""}${t.identified_people > t.identified_via_campaigns ? ` · incl. ${num(t.identified_people - t.identified_via_campaigns)} walk-ins` : ""}`}
           progress={s.progress.identified_pct}
           tone={s.progress.identified_pct != null && s.progress.identified_pct >= 1 ? "good" : "default"}
         />
@@ -74,7 +74,7 @@ export default function Overview() {
         <Card
           className="xl:col-span-2"
           title="Funnel: reach → registrations → actual attendees"
-          subtitle="Top block = anonymous platform event counts (not unique people). Bottom block = identified external people."
+          subtitle="Top block = platform event counts (not unique people). Bottom block = unique external people."
         >
           <div className="space-y-1.5">
             <FunnelBar label="Impressions" value={t.impressions} max={t.impressions} />
@@ -84,11 +84,11 @@ export default function Overview() {
           </div>
           <hr className="my-3 border-stone-200" />
           <div className="space-y-1.5">
-            <FunnelBar label="Identified people" value={t.identified_people} max={t.identified_people} />
-            <FunnelBar label="Registered" value={t.registrations} max={t.identified_people} note={conv(t.registrations, t.identified_people)} />
-            <FunnelBar label="Confirmed now" value={t.status_counts.confirmed ?? 0} max={t.identified_people} note={conv(t.status_counts.confirmed ?? 0, t.registrations)} />
-            <FunnelBar label="Attended (registered)" value={t.registered_attendees} max={t.identified_people} note={post ? conv(t.registered_attendees, t.registrations) + " regs" : "event not over"} />
-            <FunnelBar label="+ Walk-ins" value={t.walk_in_attendees} max={t.identified_people} />
+            <FunnelBar label="Identified via campaigns" value={t.identified_via_campaigns} max={t.identified_via_campaigns} />
+            <FunnelBar label="Registered" value={t.registrations} max={t.identified_via_campaigns} note={conv(t.registrations, t.identified_via_campaigns)} />
+            <FunnelBar label="Confirmed now" value={t.status_counts.confirmed ?? 0} max={t.identified_via_campaigns} note={conv(t.status_counts.confirmed ?? 0, t.registrations)} />
+            <FunnelBar label="Attended (registered)" value={t.registered_attendees} max={t.identified_via_campaigns} note={post ? conv(t.registered_attendees, t.registrations) + " regs" : "event not over"} />
+            <FunnelBar label="+ Walk-ins (identified at the gate)" value={t.walk_in_attendees} max={t.identified_via_campaigns} />
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
             <div><p className="text-xs text-slate-500">Cost per registration</p><p className="font-semibold">{inr(t.cost_per_registration)}</p></div>
@@ -139,7 +139,7 @@ export default function Overview() {
             </ResponsiveContainer>
           </div>
         </Card>
-        <Card title="Scale / change / stop" subtitle={`Rules in Plan & decide. Basis: ${post ? "cost per attendee + show rate" : "cost per registration"}.`} right={<Link href="/campaigns" className="text-xs text-blue-700 underline">All campaigns</Link>}>
+        <Card title="Scale / change / stop" subtitle={`Rules in Budget & rules. Basis: ${post ? "cost per attendee + show rate" : "cost per registration"}.`} right={<Link href="/campaigns" className="text-xs text-blue-700 underline">All campaigns</Link>}>
           <div className="space-y-2">
             {s.campaigns.map((c) => (
               <Link key={c.campaign_id} href={`/campaigns/${c.campaign_id}`} className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-stone-50">

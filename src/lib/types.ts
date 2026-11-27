@@ -1,3 +1,5 @@
+import type { Plan2027State } from "./plan2027";
+
 // Source tables: field names match the supplied dataset exactly.
 
 export interface EventRow {
@@ -195,6 +197,7 @@ export interface AppState {
   plans: Record<string, CampaignPlan>;
   settings: Settings;
   audit: AuditEntry[];
+  plan2027?: Plan2027State; // optional so app states saved before this field existed still load
 }
 
 export const DEFAULT_SETTINGS: Settings = {

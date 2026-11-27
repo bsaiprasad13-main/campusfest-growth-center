@@ -1,5 +1,5 @@
 /**
- * Budget reallocation simulator. Same model as the strategy deck (Slide 1), but its
+ * Budget reallocation simulator. Uses the same formulas as the deck's strategy model (Slide 1), but its
  * per-campaign economics come from the LIVE snapshot, so edited data changes the plan.
  *
  *   cost per registration at new spend = current cost per registration × max(1, new/current) ^ elasticity
@@ -95,7 +95,7 @@ export function simulatePlan(s: Snapshot, input: PlanInput): PlanResult {
     assumptions: [
       `Diminishing returns: cost per registration × (new ÷ current spend)^${input.elasticity} when spend rises [assumption].`,
       `Show rates are each campaign's actual rate${input.show_uplift_pts ? ` + ${input.show_uplift_pts} pts uplift [assumption]` : ""}, capped at ${(input.max_show_rate * 100).toFixed(0)}%.`,
-      `Walk-ins are ${(input.walkin_share * 100).toFixed(0)}% of attendees [assumption; 2025 actual 6.1%].`,
+      `Walk-ins are ${(input.walkin_share * 100).toFixed(1)}% of attendees [assumption unless it equals the actual share].`,
       "Cutting spend keeps the current cost per registration (no efficiency gain assumed).",
     ],
     warnings,

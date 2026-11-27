@@ -11,11 +11,14 @@ interface Msg {
   trace?: TraceStep[];
   proposals?: (Proposal & { state?: "pending" | "done" | "dismissed" | "error"; error?: string })[];
   error?: boolean;
+  detail?: string;
   model?: string;
   tokens?: number;
+  fallbacks?: string[];
 }
 
 const SUGGESTIONS = [
+  "Which 2027 bet has crossed a stop line, and what should we do?",
   "Which campaigns should we scale, change or stop, and why?",
   "Where is Paid Social losing people in the funnel?",
   "If we move ₹30,000 from Creator Partners to Student Referrals, what happens?",
@@ -23,14 +26,51 @@ const SUGGESTIONS = [
   "How were registrations tracking against target on 1 March?",
 ];
 
-// Minimal, safe markdown: **bold**, bullet lines, numbered lines, paragraphs. No HTML injection.
+const isRow = (l: string) => /^\s*\|.*\|\s*$/.test(l);
+const isSeparator = (l: string) => /^\s*\|?(\s*:?-{2,}:?\s*\|)+\s*:?-{0,}:?\s*\|?\s*$/.test(l);
+const cells = (l: string) => l.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
+
+type Block = { kind: "line"; text: string; i: number } | { kind: "table"; rows: string[][]; i: number };
+
+// Minimal, safe markdown: **bold**, bullet lines, numbered lines, tables, paragraphs. No HTML injection.
 function Rich({ text }: { text: string }) {
-  const lines = text.split("\n");
-  const inline = (s: string, k: number) =>
-    s.split(/(\*\*[^*]+\*\*)/g).map((seg, i) => (seg.startsWith("**") && seg.endsWith("**") ? <b key={`${k}-${i}`}>{seg.slice(2, -2)}</b> : <span key={`${k}-${i}`}>{seg}</span>));
+  // **bold**, `code` and <br> line breaks (models put these inside table cells); everything else is plain text.
+  const inline = (s: string, k: number | string) =>
+    s.split(/<br\s*\/?>/gi).map((part, pi) => (
+      <span key={`${k}-l${pi}`}>
+        {pi > 0 && <br />}
+        {part.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((seg, i) =>
+          seg.startsWith("**") && seg.endsWith("**") ? <b key={i}>{seg.slice(2, -2)}</b>
+          : seg.startsWith("`") && seg.endsWith("`") && seg.length > 1 ? <code key={i} className="rounded bg-stone-200 px-1">{seg.slice(1, -1)}</code>
+          : <span key={i}>{seg}</span>,
+        )}
+      </span>
+    ));
+  const blocks: Block[] = [];
+  text.split("\n").forEach((l, i) => {
+    if (isRow(l)) {
+      if (isSeparator(l)) return;
+      const last = blocks[blocks.length - 1];
+      if (last && last.kind === "table") last.rows.push(cells(l));
+      else blocks.push({ kind: "table", rows: [cells(l)], i });
+    } else blocks.push({ kind: "line", text: l, i });
+  });
   return (
     <div className="space-y-1">
-      {lines.map((l, i) => {
+      {blocks.map((b) => {
+        if (b.kind === "table") {
+          const [head, ...body] = b.rows;
+          return (
+            <div key={b.i} className="overflow-x-auto">
+              <table className="my-1 w-full text-xs">
+                <thead><tr>{head.map((c, j) => <th key={j} className="border-b border-stone-300 px-1.5 py-1 text-left font-semibold">{inline(c, `${b.i}h${j}`)}</th>)}</tr></thead>
+                <tbody>{body.map((r, ri) => <tr key={ri}>{r.map((c, j) => <td key={j} className="border-b border-stone-200 px-1.5 py-1 align-top">{inline(c, `${b.i}-${ri}-${j}`)}</td>)}</tr>)}</tbody>
+              </table>
+            </div>
+          );
+        }
+        const l = b.text;
+        const i = b.i;
         const m = l.match(/^\s*([-*•]|\d+\.)\s+(.*)$/);
         if (m) return <div key={i} className="flex gap-1.5 pl-1"><span className="text-slate-400">{/\d/.test(m[1]) ? m[1] : "•"}</span><span>{inline(m[2], i)}</span></div>;
         if (/^#{1,4}\s/.test(l)) return <p key={i} className="font-semibold">{inline(l.replace(/^#{1,4}\s/, ""), i)}</p>;
@@ -42,14 +82,15 @@ function Rich({ text }: { text: string }) {
 
 export function Copilot() {
   const { state, asOf, mutate } = useApp();
-  const [msgs, setMsgs] = useState<Msg[]>([]);
+  // The panel only mounts in the browser (after a click), so the saved chat can be read at mount.
+  const [msgs, setMsgs] = useState<Msg[]>(() => {
+    try { return JSON.parse(localStorage.getItem("copilot-chat") ?? "[]") as Msg[]; } catch { return []; }
+  });
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [waitS, setWaitS] = useState<number | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    try { const s = localStorage.getItem("copilot-chat"); if (s) setMsgs(JSON.parse(s)); } catch {}
-  }, []);
   useEffect(() => {
     try { localStorage.setItem("copilot-chat", JSON.stringify(msgs.slice(-30))); } catch {}
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -63,13 +104,29 @@ export function Copilot() {
     setInput("");
     setBusy(true);
     try {
-      const r = await fetch("/api/copilot", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: q, history, asOf: asOf ?? state?.snapshot.as_of }) });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error ?? `Request failed (${r.status})`);
-      setMsgs((m) => [...m, { role: "assistant", text: j.answer, trace: j.trace, model: j.model, tokens: j.tokens, proposals: (j.proposals ?? []).map((p: Proposal) => ({ ...p, state: "pending" })) }]);
+      // One automatic retry when the free AI tier is briefly rate-limited.
+      for (let attempt = 0; ; attempt++) {
+        const r = await fetch("/api/copilot", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: q, history, asOf: asOf ?? state?.snapshot.as_of }) });
+        const j = await r.json().catch(() => ({ error: `Request failed (${r.status})` }));
+        if (r.ok) {
+          setMsgs((m) => [...m, { role: "assistant", text: j.answer, trace: j.trace, model: j.model, tokens: j.tokens, fallbacks: j.fallbacks, proposals: (j.proposals ?? []).map((p: Proposal) => ({ ...p, state: "pending" })) }]);
+          break;
+        }
+        if (r.status === 429 && attempt === 0 && typeof j.retry_after_s === "number") {
+          for (let s = j.retry_after_s; s > 0; s--) {
+            setWaitS(s);
+            await new Promise((res) => setTimeout(res, 1000));
+          }
+          setWaitS(null);
+          continue;
+        }
+        setMsgs((m) => [...m, { role: "assistant", text: `${j.error ?? `Request failed (${r.status})`}${r.status === 429 ? " Please ask again in a minute." : ""}`, detail: j.detail, error: true }]);
+        break;
+      }
     } catch (e) {
       setMsgs((m) => [...m, { role: "assistant", text: e instanceof Error ? e.message : String(e), error: true }]);
     } finally {
+      setWaitS(null);
       setBusy(false);
     }
   }
@@ -109,6 +166,7 @@ export function Copilot() {
         {msgs.map((m, i) => (
           <div key={i} className={m.role === "user" ? "ml-8 rounded-xl bg-slate-900 px-3 py-2 text-white" : `mr-2 rounded-xl px-3 py-2 ${m.error ? "border border-orange-300 bg-orange-50 text-orange-900" : "bg-stone-100 text-slate-900"}`}>
             {m.role === "user" ? <p className="whitespace-pre-wrap">{m.text}</p> : <Rich text={m.text} />}
+            {m.detail && <details className="mt-1 text-xs opacity-80"><summary className="cursor-pointer">Technical details</summary><p className="break-words">{m.detail}</p></details>}
             {m.proposals?.map((p, j) => (
               <div key={p.id} className="mt-2 rounded-lg border border-orange-300 bg-white p-2">
                 <p className="text-xs font-semibold text-orange-800">Proposed action: needs your confirmation</p>
@@ -136,12 +194,12 @@ export function Copilot() {
                     <li key={k} className="break-words"><code className="text-slate-700">{t.tool}</code>({JSON.stringify(t.args)}) → {t.summary}</li>
                   ))}
                 </ul>
-                {m.model && <p className="mt-1">Model: {m.model}{m.tokens ? ` · ${m.tokens.toLocaleString("en-IN")} tokens` : ""}</p>}
+                {m.model && <p className="mt-1">Model: {m.model}{m.tokens ? ` · ${m.tokens.toLocaleString("en-IN")} tokens` : ""}{m.fallbacks?.length ? ` · after: ${m.fallbacks.join("; ")}` : ""}</p>}
               </details>
             )}
           </div>
         ))}
-        {busy && <p className="text-xs text-slate-500">Analysing the data…</p>}
+        {busy && <p className="text-xs text-slate-500">{waitS != null ? `The free AI tier is busy. Retrying automatically in ${waitS}s…` : "Analysing the data…"}</p>}
         <div ref={endRef} />
       </div>
       <form className="flex gap-2 border-t border-stone-200 p-3" onSubmit={(e) => { e.preventDefault(); send(input); }}>
